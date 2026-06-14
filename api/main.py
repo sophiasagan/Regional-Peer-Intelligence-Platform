@@ -67,7 +67,9 @@ def _extract_tenant(token: str) -> str:
 
 @app.middleware("http")
 async def tenant_middleware(request: Request, call_next):
-    """Attach tenant_id to request.state; skip for health check."""
+    """Attach tenant_id to request.state; skip for health check and CORS preflight."""
+    if request.method == "OPTIONS":
+        return await call_next(request)
     if request.url.path in ("/health", "/docs", "/openapi.json", "/redoc"):
         return await call_next(request)
 
