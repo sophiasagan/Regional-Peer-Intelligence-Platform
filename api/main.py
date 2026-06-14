@@ -41,10 +41,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
+_allow_origins = _raw_origins.split(",") if _raw_origins else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
-    allow_credentials=True,
+    allow_origins=_allow_origins,
+    allow_credentials=bool(_raw_origins),   # credentials only when origins are explicit
     allow_methods=["*"],
     allow_headers=["*"],
 )
