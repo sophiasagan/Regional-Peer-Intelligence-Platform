@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      external: ['mapbox-gl', '@mapbox/mapbox-gl-draw'],
+    },
+  },
   server: {
     port: 5173,
     proxy: {
