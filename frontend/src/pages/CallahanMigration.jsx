@@ -152,8 +152,9 @@ function Step1({ charterNumber, period, token, onComplete }) {
         }
       );
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        let detail = `HTTP ${res.status}`;
+        try { const err = await res.json(); detail = err.detail || detail; } catch (_) {}
+        throw new Error(detail);
       }
       setResult(await res.json());
     } catch (e) {
@@ -349,8 +350,9 @@ function Step2({ charterNumber, period, token, peerGroupId, onComplete, onBack }
         body: form,
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        let detail = `HTTP ${res.status}`;
+        try { const err = await res.json(); detail = err.detail || detail; } catch (_) {}
+        throw new Error(detail);
       }
       setResult(await res.json());
     } catch (e) {
@@ -599,11 +601,16 @@ function Step3({ charterNumber, period, token, peerGroupId, institutionState, on
 // ── Main wizard ───────────────────────────────────────────────────────────────
 
 export default function CallahanMigration({
-  charterNumber,
-  period,
+  charterNumber: charterNumberProp,
+  period: periodProp,
   token,
-  onComplete,   // called when user finishes Step 3
+  onComplete,
 }) {
+  const [charterInput,     setCharterInput]     = useState(charterNumberProp ?? '68708');
+  const [periodInput,      setPeriodInput]      = useState(periodProp        ?? '2026Q1');
+  const charterNumber = charterInput  || charterNumberProp;
+  const period        = periodInput   || periodProp;
+
   const [step,             setStep]             = useState(1);
   const [peerGroupId,      setPeerGroupId]      = useState(null);
   const [institutionState, setInstitutionState] = useState('');
@@ -626,8 +633,23 @@ export default function CallahanMigration({
     <div className="callahan-migration">
       {/* Top context bar */}
       <div className="cm-context-bar">
-        <span className="cm-context-institution">
-          Charter {charterNumber} · {period}
+        <span className="cm-context-institution" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Charter{' '}
+          <input
+            type="text"
+            value={charterInput}
+            onChange={e => setCharterInput(e.target.value)}
+            placeholder="Charter #"
+            style={{ width: 72, padding: '1px 6px', fontSize: 12, border: '1px solid #ccc', borderRadius: 4 }}
+          />
+          &nbsp;·&nbsp;
+          <input
+            type="text"
+            value={periodInput}
+            onChange={e => setPeriodInput(e.target.value)}
+            placeholder="e.g. 2026Q1"
+            style={{ width: 76, padding: '1px 6px', fontSize: 12, border: '1px solid #ccc', borderRadius: 4 }}
+          />
         </span>
         <span className="cm-context-note">
           Migrating from Callahan Analytics

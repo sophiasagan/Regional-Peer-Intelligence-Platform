@@ -496,7 +496,7 @@ async def build_callahan_peer_group(
     and creates a P76 peer group that mirrors it exactly.
     Returns preview metrics so the user can confirm the numbers match.
     """
-    tenant_id = request.state.tenant_id
+    tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
 
     if criteria.asset_tier not in ASSET_TIER_RANGES:
         raise HTTPException(
@@ -553,7 +553,7 @@ async def verify_callahan(
     Maps column names using CALLAHAN_TO_P76_METRIC_MAP.
     Shows Callahan value vs P76 value side-by-side.
     """
-    tenant_id = request.state.tenant_id
+    tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
 
     # Read uploaded file
     filename    = file.filename or "upload.csv"
@@ -685,7 +685,7 @@ async def get_regional_context(
       National band (blue) = Callahan-equivalent peer group from Step 1
       Regional line (purple) = institutions in same geographic market
     """
-    tenant_id = request.state.tenant_id
+    tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
     from db import get_engine
     from processing.peer_engine import PeerGroupType, build_peer_group
 
