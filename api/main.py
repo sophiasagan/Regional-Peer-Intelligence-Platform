@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from jose import JWTError, jwt
 
 from api.routers import alerts, market_share, onboarding, peer_comparison, query, reports
@@ -69,7 +69,16 @@ def _extract_tenant(token: str) -> str:
 async def tenant_middleware(request: Request, call_next):
     """Attach tenant_id to request.state; skip for health check and CORS preflight."""
     if request.method == "OPTIONS":
-        return await call_next(request)
+        origin = request.headers.get("Origin", "*")
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+                "Access-Control-Max-Age": "600",
+            },
+        )
     if request.url.path in ("/health", "/docs", "/openapi.json", "/redoc"):
         return await call_next(request)
 
@@ -85,7 +94,11 @@ async def tenant_middleware(request: Request, call_next):
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
-    return await call_next(request)
+    response = await call_next(request)
+    origin = request.headers.get("Origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    return response
 
 
 @app.get("/health")
