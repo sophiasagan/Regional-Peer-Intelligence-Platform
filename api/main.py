@@ -14,17 +14,24 @@ from api.routers import alerts, market_share, onboarding, peer_comparison, query
 
 logger = logging.getLogger(__name__)
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
+JWT_SECRET    = os.environ.get("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 
-SKIP_AUTH_PREFIXES = ("/onboarding", "/health", "/docs", "/openapi.json", "/redoc")
+SKIP_AUTH = ("/onboarding", "/health", "/docs", "/openapi.json", "/redoc")
+
+# Permissive CORS — Bearer token auth, no cookies, so wildcard is safe
+_CORS = {
+    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+    "Access-Control-Max-Age":       "86400",
+}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting cu_market_intelligence API")
     yield
-    logger.info("Shutting down")
 
 
 app = FastAPI(
@@ -34,59 +41,41 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# No CORSMiddleware — CORS handled entirely in tenant_middleware below
-# to avoid the allow_origins="*" + allow_credentials=True conflict in Starlette 0.37+
-
 
 def _extract_tenant(token: str) -> str:
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        tenant_id = payload.get("tenant_id")
+        payload    = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        tenant_id  = payload.get("tenant_id")
         if not tenant_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Missing tenant_id in token")
+            raise HTTPException(status_code=401, detail="Missing tenant_id in token")
         return str(tenant_id)
     except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail=f"Invalid token: {exc}")
-
-
-def _cors_headers(origin: str) -> dict:
-    return {
-        "Access-Control-Allow-Origin":  origin or "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
-        "Access-Control-Max-Age":       "600",
-        "Vary":                         "Origin",
-    }
+        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
 
 
 @app.middleware("http")
 async def tenant_middleware(request: Request, call_next):
-    origin = request.headers.get("Origin", "")
-    cors  = _cors_headers(origin)
-
-    # ── CORS preflight ──────────────────────────────────────────────────────
+    # OPTIONS preflight — return immediately with CORS headers, no auth needed
     if request.method == "OPTIONS":
-        return Response(status_code=200, headers=cors)
+        return Response(status_code=204, headers=_CORS)
 
-    # ── Auth-exempt paths ───────────────────────────────────────────────────
     path = request.url.path
-    if any(path == p or path.startswith(p + "/") or path.startswith(p)
-           for p in SKIP_AUTH_PREFIXES):
-        response = await call_next(request)
-        for k, v in cors.items():
-            response.headers.append(k, v)
-        return response
 
-    # ── JWT auth ────────────────────────────────────────────────────────────
+    # Auth-exempt paths — pass through, attach CORS to response
+    if any(path == s or path.startswith(s) for s in SKIP_AUTH):
+        resp = await call_next(request)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+
+    # JWT auth required
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Bearer token required"},
-            headers=cors,
+            headers={"Access-Control-Allow-Origin": "*"},
         )
+
     token = auth.removeprefix("Bearer ").strip()
     try:
         request.state.tenant_id = _extract_tenant(token)
@@ -94,13 +83,12 @@ async def tenant_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
-            headers=cors,
+            headers={"Access-Control-Allow-Origin": "*"},
         )
 
-    response = await call_next(request)
-    for k, v in cors.items():
-        response.headers.append(k, v)
-    return response
+    resp = await call_next(request)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 
 @app.get("/health")
@@ -108,9 +96,9 @@ async def health() -> dict:
     return {"status": "ok", "version": "2.0.0"}
 
 
-app.include_router(market_share.router,    prefix="/market-share",    tags=["market-share"])
-app.include_router(peer_comparison.router, prefix="/peer-comparison",  tags=["peer-comparison"])
-app.include_router(query.router,           prefix="/ask",              tags=["nl-query"])
-app.include_router(alerts.router,          prefix="/alerts",           tags=["alerts"])
-app.include_router(reports.router,         prefix="/reports",          tags=["reports"])
-app.include_router(onboarding.router,      prefix="/onboarding",       tags=["onboarding"])
+app.include_router(market_share.router,    prefix="/market-share",   tags=["market-share"])
+app.include_router(peer_comparison.router, prefix="/peer-comparison", tags=["peer-comparison"])
+app.include_router(query.router,           prefix="/ask",             tags=["nl-query"])
+app.include_router(alerts.router,          prefix="/alerts",          tags=["alerts"])
+app.include_router(reports.router,         prefix="/reports",         tags=["reports"])
+app.include_router(onboarding.router,      prefix="/onboarding",      tags=["onboarding"])
