@@ -126,7 +126,7 @@ function useMapbox(containerRef, onCountyClick, colorExpr) {
   useEffect(() => {
     if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return;
 
-    import('mapbox-gl').then(({ default: mapboxgl }) => {
+    import(/* @vite-ignore */ 'mapbox-gl').then(({ default: mapboxgl }) => {
       mapboxgl.accessToken = MAPBOX_TOKEN;
 
       const map = new mapboxgl.Map({
@@ -247,7 +247,7 @@ function useMapbox(containerRef, onCountyClick, colorExpr) {
   // Expose draw control toggle
   const startDraw = useCallback(() => {
     if (!mapRef.current) return;
-    import('@mapbox/mapbox-gl-draw').then(({ default: MapboxDraw }) => {
+    import(/* @vite-ignore */ '@mapbox/mapbox-gl-draw').then(({ default: MapboxDraw }) => {
       if (drawRef.current) {
         mapRef.current.removeControl(drawRef.current);
       }
