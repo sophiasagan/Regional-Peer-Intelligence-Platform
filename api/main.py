@@ -67,37 +67,47 @@ def _extract_tenant(token: str) -> str:
 
 @app.middleware("http")
 async def tenant_middleware(request: Request, call_next):
-    """Attach tenant_id to request.state; skip for health check and CORS preflight."""
+    """Attach tenant_id to request.state; handle CORS on every response."""
+    origin = request.headers.get("Origin", "")
+    cors = {"Access-Control-Allow-Origin": origin} if origin else {}
+
     if request.method == "OPTIONS":
-        origin = request.headers.get("Origin", "*")
         return Response(
             status_code=200,
             headers={
-                "Access-Control-Allow-Origin": origin,
+                **cors,
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
                 "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
                 "Access-Control-Max-Age": "600",
             },
         )
+
     if request.url.path in ("/health", "/docs", "/openapi.json", "/redoc"):
-        return await call_next(request)
+        response = await call_next(request)
+        for k, v in cors.items():
+            response.headers[k] = v
+        return response
 
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Bearer token required"},
+            headers=cors,
         )
     token = auth.removeprefix("Bearer ").strip()
     try:
         request.state.tenant_id = _extract_tenant(token)
     except HTTPException as exc:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=cors,
+        )
 
     response = await call_next(request)
-    origin = request.headers.get("Origin")
-    if origin:
-        response.headers["Access-Control-Allow-Origin"] = origin
+    for k, v in cors.items():
+        response.headers[k] = v
     return response
 
 
