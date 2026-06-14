@@ -82,7 +82,8 @@ async def tenant_middleware(request: Request, call_next):
             },
         )
 
-    if request.url.path in ("/health", "/docs", "/openapi.json", "/redoc"):
+    if request.url.path.startswith("/onboarding") or \
+       request.url.path in ("/health", "/docs", "/openapi.json", "/redoc"):
         response = await call_next(request)
         for k, v in cors.items():
             response.headers[k] = v

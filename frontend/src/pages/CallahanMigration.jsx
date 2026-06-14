@@ -142,7 +142,7 @@ function Step1({ charterNumber, period, token, onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             asset_tier:           assetTier,
@@ -346,7 +346,7 @@ function Step2({ charterNumber, period, token, peerGroupId, onComplete, onBack }
     try {
       const res = await fetch(`${API}/onboarding/verify-callahan`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: form,
       });
       if (!res.ok) {
