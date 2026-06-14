@@ -10,8 +10,8 @@ psycopg2-binary==2.9.9
 alembic==1.13.1
 
 # Data processing
-pandas==2.2.2
-numpy==1.26.4
+pandas==2.2.3
+numpy==2.2.0
 
 # HTTP
 requests==2.32.2
