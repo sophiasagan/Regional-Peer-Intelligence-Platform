@@ -1,12 +1,4 @@
-"""FastAPI application entry point — cu_market_intelligence API.
-
-JWT middleware extracts tenant_id from bearer token on every request.
-All routers enforce tenant isolation — never cross-contaminate tenant data.
-Tenants only see institutions in their subscribed geographies.
-
-Run:
-    uvicorn api.main:app --reload
-"""
+"""FastAPI application entry point — cu_market_intelligence API."""
 
 from __future__ import annotations
 
@@ -15,7 +7,6 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from jose import JWTError, jwt
 
@@ -25,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
+
+SKIP_AUTH_PREFIXES = ("/onboarding", "/health", "/docs", "/openapi.json", "/redoc")
 
 
 @asynccontextmanager
@@ -41,54 +34,52 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
-_allow_origins = _raw_origins.split(",") if _raw_origins else ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allow_origins,
-    allow_credentials=bool(_raw_origins),   # credentials only when origins are explicit
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# No CORSMiddleware — CORS handled entirely in tenant_middleware below
+# to avoid the allow_origins="*" + allow_credentials=True conflict in Starlette 0.37+
 
 
 def _extract_tenant(token: str) -> str:
-    """Decode JWT bearer token and return tenant_id claim."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         tenant_id = payload.get("tenant_id")
         if not tenant_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing tenant_id in token")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail="Missing tenant_id in token")
         return str(tenant_id)
     except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {exc}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail=f"Invalid token: {exc}")
+
+
+def _cors_headers(origin: str) -> dict:
+    return {
+        "Access-Control-Allow-Origin":  origin or "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+        "Access-Control-Max-Age":       "600",
+        "Vary":                         "Origin",
+    }
 
 
 @app.middleware("http")
 async def tenant_middleware(request: Request, call_next):
-    """Attach tenant_id to request.state; handle CORS on every response."""
     origin = request.headers.get("Origin", "")
-    cors = {"Access-Control-Allow-Origin": origin} if origin else {}
+    cors  = _cors_headers(origin)
 
+    # ── CORS preflight ──────────────────────────────────────────────────────
     if request.method == "OPTIONS":
-        return Response(
-            status_code=200,
-            headers={
-                **cors,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-                "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
-                "Access-Control-Max-Age": "600",
-            },
-        )
+        return Response(status_code=200, headers=cors)
 
-    if request.url.path.startswith("/onboarding") or \
-       request.url.path in ("/health", "/docs", "/openapi.json", "/redoc"):
+    # ── Auth-exempt paths ───────────────────────────────────────────────────
+    path = request.url.path
+    if any(path == p or path.startswith(p + "/") or path.startswith(p)
+           for p in SKIP_AUTH_PREFIXES):
         response = await call_next(request)
         for k, v in cors.items():
-            response.headers[k] = v
+            response.headers.append(k, v)
         return response
 
+    # ── JWT auth ────────────────────────────────────────────────────────────
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return JSONResponse(
@@ -108,7 +99,7 @@ async def tenant_middleware(request: Request, call_next):
 
     response = await call_next(request)
     for k, v in cors.items():
-        response.headers[k] = v
+        response.headers.append(k, v)
     return response
 
 
@@ -117,9 +108,9 @@ async def health() -> dict:
     return {"status": "ok", "version": "2.0.0"}
 
 
-app.include_router(market_share.router,   prefix="/market-share",   tags=["market-share"])
-app.include_router(peer_comparison.router, prefix="/peer-comparison", tags=["peer-comparison"])
-app.include_router(query.router,          prefix="/ask",             tags=["nl-query"])
-app.include_router(alerts.router,         prefix="/alerts",          tags=["alerts"])
-app.include_router(reports.router,        prefix="/reports",         tags=["reports"])
-app.include_router(onboarding.router,     prefix="/onboarding",      tags=["onboarding"])
+app.include_router(market_share.router,    prefix="/market-share",    tags=["market-share"])
+app.include_router(peer_comparison.router, prefix="/peer-comparison",  tags=["peer-comparison"])
+app.include_router(query.router,           prefix="/ask",              tags=["nl-query"])
+app.include_router(alerts.router,          prefix="/alerts",           tags=["alerts"])
+app.include_router(reports.router,         prefix="/reports",          tags=["reports"])
+app.include_router(onboarding.router,      prefix="/onboarding",       tags=["onboarding"])

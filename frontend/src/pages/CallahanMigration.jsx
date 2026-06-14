@@ -242,12 +242,10 @@ function Step1({ charterNumber, period, token, onComplete }) {
       {error && (
         <div className="cm-error">
           {error}
-          {!API && (
-            <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8 }}>
-              VITE_API_URL is not set — requests are going to the Vercel domain.
-              Set this env var in Vercel → Settings → Environment Variables and redeploy.
-            </div>
-          )}
+          <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8 }}>
+            API target: <code>{API || '(empty — same domain)'}</code>
+            {!API && ' — set VITE_API_URL in Vercel → Settings → Environment Variables and redeploy'}
+          </div>
         </div>
       )}
 
