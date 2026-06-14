@@ -239,7 +239,17 @@ function Step1({ charterNumber, period, token, onComplete }) {
         </div>
       </fieldset>
 
-      {error && <div className="cm-error">{error}</div>}
+      {error && (
+        <div className="cm-error">
+          {error}
+          {!API && (
+            <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8 }}>
+              VITE_API_URL is not set — requests are going to the Vercel domain.
+              Set this env var in Vercel → Settings → Environment Variables and redeploy.
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         className="cm-btn cm-btn--primary"
