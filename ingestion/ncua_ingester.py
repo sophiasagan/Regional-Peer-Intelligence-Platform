@@ -168,7 +168,7 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
 
 def _period_from_cycle_date(series: pd.Series) -> pd.Series:
     """Convert '3/31/2026' or '2026-03-31' → '2026Q1'."""
-    dt = pd.to_datetime(series, infer_datetime_format=True, errors="coerce")
+    dt = pd.to_datetime(series, errors="coerce")
     quarter = ((dt.dt.month - 1) // 3 + 1).astype("Int64")
     return dt.dt.year.astype("Int64").astype("string") + "Q" + quarter.astype("string")
 
@@ -267,6 +267,14 @@ def upsert(df: pd.DataFrame, db_url: str | None = None) -> int:
     engine = get_engine(db_url)
     table_cols = {c.name for c in institutions_quarterly.c}
     store_df = df[[c for c in df.columns if c in table_cols]].copy()
+
+    # NCUA bulk CSV can contain duplicate (charter_number, period) rows.
+    # PostgreSQL ON CONFLICT DO UPDATE rejects batches with intra-batch duplicates.
+    before = len(store_df)
+    store_df = store_df.drop_duplicates(subset=["charter_number", "period"], keep="last")
+    if (dropped := before - len(store_df)):
+        logger.warning("Dropped %d duplicate NCUA rows", dropped)
+
     records = store_df.where(pd.notna(store_df), other=None).to_dict("records")
 
     pk_cols = {"charter_number", "period"}
