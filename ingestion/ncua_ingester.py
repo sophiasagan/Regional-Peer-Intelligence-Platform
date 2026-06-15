@@ -44,8 +44,8 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_010": "acct_010",
     "ACCT_018": "acct_018",
     "ACCT_025B": "acct_025B",
-    "ACCT_797": "acct_797",
-    "ACCT_997": "acct_797",         # some versions use 997 for net worth
+    # ACCT_997 and ACCT_998 are computed in _extract_main_csv from 797 components
+    "ACCT_997": "acct_997",
     "ACCT_998": "acct_998",
     # members
     "ACCT_083": "acct_083",
@@ -117,7 +117,7 @@ NCUA_BULK_URL_TEMPLATE = (
 )
 
 _BIGINT_COLS = [
-    "acct_010", "acct_018", "acct_025B", "acct_797",
+    "acct_010", "acct_018", "acct_025B", "acct_997",
     "acct_020B", "acct_DL0141", "acct_021B", "acct_022B", "acct_023B",
     "acct_041B", "acct_041A", "acct_DL0145", "acct_DL0146",
     "acct_550", "acct_551", "acct_680", "acct_550C1", "acct_550C2",
@@ -170,7 +170,7 @@ def _read_schedule(zf, member, extract_dir: Path) -> pd.DataFrame | None:
                 df = pd.read_csv(path, sep=sep, dtype=str, encoding="latin-1",
                                  low_memory=False, on_bad_lines="warn")
                 if len(df.columns) > 2:
-                    df.columns = [c.strip() for c in df.columns]
+                    df.columns = [c.strip().upper() for c in df.columns]
                     logger.info("Read %s: %d rows × %d cols (sep=%r)",
                                 member.filename, len(df), len(df.columns), sep)
                     return df
@@ -202,7 +202,18 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
 
     # Files to join, in priority order. FOICU = identity, FS220 = main financials,
     # FS220D = delinquency. Additional schedules joined if present.
-    WANTED = ["FOICU.txt", "FS220.txt", "FS220D.txt", "FS220A.txt", "FS220G.txt"]
+    WANTED = [
+        "FOICU.txt",   # identity: CU_NUMBER, CU_NAME, STATE, COUNTY, CYCLE_DATE
+        "FS220.txt",   # balance sheet: ACCT_010, ACCT_025B, ACCT_018, delinquency totals
+        "FS220B.txt",  # net worth components (ACCT_797A-E), net income (ACCT_661), ACCT_680
+        "FS220D.txt",  # shares schedule
+        "FS220A.txt",  # loans schedule
+        "FS220G.txt",  # additional data
+        "FS220I.txt",  # charge-off details: Acct_550C1, Acct_550C2 (normalized to uppercase)
+        "FS220N.txt",  # CECL allowance (ACCT_AS0048), credit loss expense (ACCT_IS0017)
+        "FS220P.txt",  # delinquency buckets (ACCT_DL0141/145/146), NIM (ACCT_IS0010)
+        "FS220R.txt",  # risk-based capital ratio (ACCT_RB0172)
+    ]
     JOIN_ON = ["CU_NUMBER", "CYCLE_DATE"]
 
     with zipfile.ZipFile(zip_path) as zf:
@@ -251,6 +262,18 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
             continue
         result = result.merge(df[pk_present + new_cols], on=pk_present, how="left")
         logger.info("Joined %d new columns; result now %d cols", len(new_cols), len(result.columns))
+
+    # NCUA publishes net worth as components 797A…797E (not a single ACCT_797 total).
+    # Sum them to produce ACCT_997 (total net worth) and ACCT_998 (net worth ratio).
+    nw_cols = [c for c in result.columns if c.startswith("ACCT_797") and len(c) == 9]
+    if nw_cols:
+        result["ACCT_997"] = result[nw_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1, skipna=True)
+        logger.info("Computed ACCT_997 from components: %s", nw_cols)
+    if "ACCT_997" in result.columns and "ACCT_010" in result.columns:
+        nw = pd.to_numeric(result["ACCT_997"], errors="coerce")
+        assets = pd.to_numeric(result["ACCT_010"], errors="coerce").replace(0, np.nan)
+        result["ACCT_998"] = nw / assets
+        logger.info("Computed ACCT_998 (net worth ratio)")
 
     result.to_csv(combined_path, index=False)
     logger.info("Combined CSV: %d rows × %d cols → %s", len(result), len(result.columns), combined_path)
@@ -347,8 +370,7 @@ def compute_derived_ratios(df: pd.DataFrame) -> pd.DataFrame:
     df["alll_coverage"] = allowance / delinq
     df["alll_to_loans"] = allowance / loans
 
-    # Net worth ratio: CLAUDE.md specifies acct_997/acct_010; NCUA account 797 = net worth
-    nw = df.get("acct_797", pd.Series(dtype=float, index=df.index))
+    nw = df.get("acct_997", pd.Series(dtype=float, index=df.index))
     df["nwratio"] = nw / assets
 
     return df
