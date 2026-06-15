@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -59,7 +60,8 @@ def load_financials(period: str, db_url: str | None = None) -> pd.DataFrame:
 
 
 def _compute_distribution(values: pd.Series) -> dict:
-    clean = values.replace({float("inf"): pd.NA, float("-inf"): pd.NA}).dropna()
+    clean = pd.to_numeric(values, errors="coerce")
+    clean = clean[np.isfinite(clean)]
     if len(clean) < 5:
         return {}
     return {
