@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
 from jose import JWTError, jwt
+
+
+class NaNSafeJSONResponse(JSONResponse):
+    """JSONResponse that converts nan/inf → null so json.dumps never raises."""
+
+    @staticmethod
+    def _sanitize(obj):
+        if isinstance(obj, float) and not math.isfinite(obj):
+            return None
+        if isinstance(obj, dict):
+            return {k: NaNSafeJSONResponse._sanitize(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [NaNSafeJSONResponse._sanitize(v) for v in obj]
+        return obj
+
+    def render(self, content) -> bytes:
+        return json.dumps(
+            self._sanitize(content),
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
 
 from api.routers import alerts, market_share, onboarding, peer_comparison, query, reports
 
@@ -45,6 +69,7 @@ app = FastAPI(
     version="2.0.0",
     description="Regional peer intelligence — NCUA + FDIC + HMDA + Census ACS",
     lifespan=lifespan,
+    default_response_class=NaNSafeJSONResponse,
 )
 
 
