@@ -162,7 +162,7 @@ def _build_peer_group(
                 FROM institutions_quarterly
                 WHERE period = :period
                   AND acct_010 BETWEEN :lo AND :hi
-                  AND state = ANY(:states)
+                  AND state_code = ANY(:states)
                 ORDER BY acct_010 DESC
             """),
             {
@@ -513,14 +513,14 @@ async def build_callahan_peer_group(
     with engine.connect() as conn:
         inst_row = conn.execute(
             text("""
-                SELECT institution_name, state FROM institutions_quarterly
+                SELECT institution_name, state_code FROM institutions_quarterly
                 WHERE charter_number = :c AND period = :p LIMIT 1
             """),
             {"c": charter_number, "p": period},
         ).mappings().first()
 
     institution_name  = inst_row["institution_name"] if inst_row else f"Charter {charter_number}"
-    institution_state = inst_row["state"] if inst_row else None
+    institution_state = inst_row["state_code"] if inst_row else None
 
     group_id, charters, n_institutions = _build_peer_group(
         criteria, charter_number, period, tenant_id, DB_URL
@@ -698,10 +698,10 @@ async def get_regional_context(
     # Institution state (for signal separator personalization)
     with engine.connect() as conn:
         inst_row = conn.execute(
-            text("SELECT state FROM institutions_quarterly WHERE charter_number = :c AND period = :p LIMIT 1"),
+            text("SELECT state_code FROM institutions_quarterly WHERE charter_number = :c AND period = :p LIMIT 1"),
             {"c": charter_number, "p": period},
         ).mappings().first()
-    inst_state = inst_row["state"] if inst_row else None
+    inst_state = inst_row["state_code"] if inst_row else None
 
     # National peer group (Callahan-equivalent from Step 1)
     nat_dist: Optional[DistributionStats] = None

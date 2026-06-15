@@ -31,6 +31,12 @@ _CORS = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting cu_market_intelligence API")
+    try:
+        from db import create_all_tables
+        create_all_tables()
+        logger.info("Database tables verified/created")
+    except Exception as exc:
+        logger.warning("create_all_tables failed (check DATABASE_URL): %s", exc)
     yield
 
 

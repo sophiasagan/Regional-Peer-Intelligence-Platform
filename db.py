@@ -9,9 +9,10 @@ from __future__ import annotations
 import os
 
 from sqlalchemy import (
-    BigInteger, Column, DateTime, Float, Integer, MetaData,
-    String, Table, UniqueConstraint, create_engine, func,
+    ARRAY, BigInteger, Boolean, Column, DateTime, Float, Integer, MetaData,
+    String, Table, Text, UniqueConstraint, create_engine, func,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Engine
 
 metadata = MetaData()
@@ -111,6 +112,20 @@ census_demographics = Table(
     Column("labor_force", Integer),
     Column("unemployed", Integer),
     Column("ingested_at", DateTime, server_default=func.now()),
+)
+
+peer_groups = Table(
+    "peer_groups",
+    metadata,
+    Column("id", String(36), primary_key=True),   # UUID stored as text
+    Column("tenant_id", String(36)),
+    Column("group_name", Text),
+    Column("group_type", String(50)),              # callahan_national | regional | custom
+    Column("asset_tier", String(50)),
+    Column("geography_type", String(20)),          # state | county | msa | national
+    Column("institution_ids", ARRAY(Text)),
+    Column("is_default", Boolean, server_default="false"),
+    Column("created_at", DateTime, server_default=func.now()),
 )
 
 peer_distributions = Table(
