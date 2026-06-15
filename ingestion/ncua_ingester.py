@@ -39,17 +39,20 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "CYCLE_DATE": "period",
     "STATE": "state_code",
     "COUNTY": "county_name",
-    # balance sheet
+    "COUNTY_CODE": "county_name",   # alternate in newer FOICU.txt
+    # balance sheet — standard ACCT_ prefix (works in both old and new format)
     "ACCT_010": "acct_010",
     "ACCT_018": "acct_018",
     "ACCT_025B": "acct_025B",
     "ACCT_797": "acct_797",
+    "ACCT_997": "acct_797",         # some versions use 997 for net worth
     "ACCT_998": "acct_998",
     # members
     "ACCT_083": "acct_083",
     # delinquency buckets
     "ACCT_020B": "acct_020B",
     "ACCT_DL0141": "acct_DL0141",
+    "DL0141": "acct_DL0141",        # bare code (no ACCT_ prefix) in 2024+ format
     "ACCT_021B": "acct_021B",
     "ACCT_022B": "acct_022B",
     "ACCT_023B": "acct_023B",
@@ -57,37 +60,48 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_041A": "acct_041A",
     # non-accrual
     "ACCT_DL0145": "acct_DL0145",
+    "DL0145": "acct_DL0145",
     "ACCT_DL0146": "acct_DL0146",
+    "DL0146": "acct_DL0146",
     # charge-offs (YTD)
     "ACCT_550": "acct_550",
     "ACCT_551": "acct_551",
     "ACCT_680": "acct_680",
     "ACCT_550C1": "acct_550C1",
+    "550C1": "acct_550C1",
     "ACCT_550C2": "acct_550C2",
-    # allowances
+    "550C2": "acct_550C2",
+    # allowances — CECL (AS0048) and pre-CECL (719)
     "ACCT_AS0048": "acct_AS0048",
+    "AS0048": "acct_AS0048",        # bare code in 2024+ format
     "ACCT_719": "acct_719",
     # income statement
     "ACCT_115": "acct_115",
     "ACCT_IS0010": "acct_IS0010",
+    "IS0010": "acct_IS0010",        # bare code in 2024+ format
     "ACCT_IS0017": "acct_IS0017",
+    "IS0017": "acct_IS0017",
     "ACCT_117": "acct_117",
     "ACCT_671": "acct_671",
     "ACCT_661A": "acct_661A",
+    "661A": "acct_661A",            # bare code in 2024+ format
+    "ACCT_661": "acct_661A",        # some versions drop the A suffix
     # capital
     "ACCT_RB0172": "acct_RB0172",
+    "RB0172": "acct_RB0172",        # bare code in 2024+ format
 }
 
 # Delinquency sub-mapping: raw CSV names that differ from ACCT_XXX convention.
 # NCUA 5300 Version 2025.1. Verify column names against data dictionary each release.
+# Alternate column names from older single-file NCUA format (pre-2024).
+# In the 2024+ multi-file format these fields appear as ACCT_XXX or bare codes
+# in the relevant schedule files, so these alternates are mainly legacy coverage.
 NCUA_DELINQUENCY_FIELD_MAP: dict[str, str] = {
-    "DLNQ60": "acct_DL0141",      # 60-89 days total
+    "DLNQ60": "acct_DL0141",      # 60-89 days total (old format)
     "DLNQ90": "acct_021B",        # 90-179 days total
     "DLNQ180": "acct_022B",       # 180-359 days total
     "DLNQ360": "acct_023B",       # 360+ days total
     "DELINQTOTAL": "acct_041B",   # total 60+ day delinquent balance
-    "DL0145": "acct_DL0145",      # non-commercial non-accrual
-    "DL0146": "acct_DL0146",      # commercial non-accrual
     "NCLNS": "acct_550",          # total gross charge-offs
     "NCRECOV": "acct_551",        # total recoveries
     "NCCC": "acct_680",           # credit card charge-offs
