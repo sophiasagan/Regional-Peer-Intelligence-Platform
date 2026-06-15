@@ -151,15 +151,33 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
     extract_dir.mkdir(exist_ok=True)
 
     with zipfile.ZipFile(zip_path) as zf:
+        all_members = zf.infolist()
+        logger.info("ZIP contents: %s", [m.filename for m in all_members])
+
         candidates = [
-            m for m in zf.infolist()
+            m for m in all_members
             if m.filename.lower().endswith((".txt", ".csv"))
             and not m.filename.startswith("__MACOSX")
+            # Exclude branch-location files — they share charter_number but lack 5300 financials
+            and "branch" not in m.filename.lower()
         ]
+
+        if not candidates:
+            # Fall back to all text files if branch-exclusion left nothing
+            candidates = [
+                m for m in all_members
+                if m.filename.lower().endswith((".txt", ".csv"))
+                and not m.filename.startswith("__MACOSX")
+            ]
+
         if not candidates:
             raise ValueError(f"No data file found in {zip_path.name}; contents: {zf.namelist()}")
-        # Largest file is the main 5300 data (not the data dictionary PDF/XLS)
-        target = max(candidates, key=lambda m: m.file_size)
+
+        # Among remaining candidates, prefer files with "5300" in the name;
+        # otherwise fall back to the largest file.
+        preferred = [m for m in candidates if "5300" in m.filename]
+        target = preferred[0] if preferred else max(candidates, key=lambda m: m.file_size)
+
         zf.extract(target, extract_dir)
         csv_path = extract_dir / target.filename
         logger.info("Extracted %s (%.1f MB)", target.filename, target.file_size / 1e6)
