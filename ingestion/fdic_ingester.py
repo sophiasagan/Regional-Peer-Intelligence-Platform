@@ -144,6 +144,15 @@ def upsert(df: pd.DataFrame, year: int, db_url: str | None = None) -> int:
 
     table_cols = {c.name for c in fdic_deposits.c}
     store_df = df[[c for c in df.columns if c in table_cols]].copy()
+
+    # FDIC SOD source data can contain duplicate (cert, year, branch_name) rows.
+    # PostgreSQL ON CONFLICT DO UPDATE rejects batches with intra-batch duplicates.
+    pk_cols = ["fdic_cert", "year", "branch_name"]
+    before = len(store_df)
+    store_df = store_df.drop_duplicates(subset=[c for c in pk_cols if c in store_df.columns], keep="last")
+    if (dropped := before - len(store_df)):
+        logger.warning("Dropped %d duplicate FDIC rows for year %d", dropped, year)
+
     records = store_df.where(pd.notna(store_df), other=None).to_dict("records")
 
     update_cols = [c for c in table_cols if c not in ("fdic_cert", "year", "branch_name", "ingested_at")]
