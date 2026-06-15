@@ -146,42 +146,101 @@ def download_bulk_zip(url: str, dest_dir: str) -> str:
     return _extract_main_csv(zip_path, dest)
 
 
+def _read_schedule(zf, member, extract_dir: Path) -> pd.DataFrame | None:
+    """Extract one schedule file from the ZIP and read it as a DataFrame."""
+    try:
+        zf.extract(member, extract_dir)
+        path = extract_dir / member.filename
+        for sep in (",", "\t", "|"):
+            try:
+                df = pd.read_csv(path, sep=sep, dtype=str, encoding="latin-1",
+                                 low_memory=False, on_bad_lines="warn")
+                if len(df.columns) > 2:
+                    df.columns = [c.strip() for c in df.columns]
+                    logger.info("Read %s: %d rows × %d cols (sep=%r)",
+                                member.filename, len(df), len(df.columns), sep)
+                    return df
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.warning("Could not read %s: %s", member.filename, exc)
+    return None
+
+
 def _extract_main_csv(zip_path: Path, dest: Path) -> str:
+    """Extract and join the relevant NCUA schedule files into a single combined CSV.
+
+    NCUA changed from a single CallReportData file to per-schedule files in 2024+:
+      FOICU.txt  — institution identity (CU_NUMBER, CU_NAME, STATE, COUNTY, CYCLE_DATE)
+      FS220.txt  — main balance sheet and income (ACCT_010, ACCT_025B, ACCT_797, …)
+      FS220D.txt — delinquency schedule (ACCT_041B, buckets, charge-offs)
+
+    We join all three on (CU_NUMBER, CYCLE_DATE) and write a combined CSV.
+    Falls back to the old single-file approach if FOICU.txt is not present.
+    """
     extract_dir = dest / zip_path.stem
     extract_dir.mkdir(exist_ok=True)
 
+    combined_path = extract_dir / "_combined.csv"
+    if combined_path.exists():
+        logger.info("Using cached combined CSV %s", combined_path)
+        return str(combined_path)
+
+    # Files to join, in priority order. FOICU = identity, FS220 = main financials,
+    # FS220D = delinquency. Additional schedules joined if present.
+    WANTED = ["FOICU.txt", "FS220.txt", "FS220D.txt", "FS220A.txt", "FS220G.txt"]
+    JOIN_ON = ["CU_NUMBER", "CYCLE_DATE"]
+
     with zipfile.ZipFile(zip_path) as zf:
-        all_members = zf.infolist()
-        logger.info("ZIP contents: %s", [m.filename for m in all_members])
+        by_name = {m.filename: m for m in zf.infolist()}
+        logger.info("ZIP contents: %s", list(by_name.keys()))
 
-        candidates = [
-            m for m in all_members
-            if m.filename.lower().endswith((".txt", ".csv"))
-            and not m.filename.startswith("__MACOSX")
-            # Exclude branch-location files — they share charter_number but lack 5300 financials
-            and "branch" not in m.filename.lower()
-        ]
+        frames: list[pd.DataFrame] = []
+        for fname in WANTED:
+            member = by_name.get(fname)
+            if member is None:
+                continue
+            df = _read_schedule(zf, member, extract_dir)
+            if df is not None:
+                frames.append(df)
 
-        if not candidates:
-            # Fall back to all text files if branch-exclusion left nothing
+        if not frames:
+            # Legacy format: single large file (old pre-2024 format)
             candidates = [
-                m for m in all_members
+                m for m in zf.infolist()
                 if m.filename.lower().endswith((".txt", ".csv"))
                 and not m.filename.startswith("__MACOSX")
+                and "branch" not in m.filename.lower()
+                and "atm" not in m.filename.lower()
+                and "readme" not in m.filename.lower()
+                and "tradename" not in m.filename.lower()
+                and "acctdesc" not in m.filename.lower()
             ]
+            if not candidates:
+                raise ValueError(f"No usable data file in {zip_path.name}")
+            target = max(candidates, key=lambda m: m.file_size)
+            df = _read_schedule(zf, target, extract_dir)
+            if df is None:
+                raise ValueError(f"Could not read {target.filename}")
+            df.to_csv(combined_path, index=False)
+            return str(combined_path)
 
-        if not candidates:
-            raise ValueError(f"No data file found in {zip_path.name}; contents: {zf.namelist()}")
+    # Join all frames on CU_NUMBER + CYCLE_DATE
+    result = frames[0]
+    for df in frames[1:]:
+        pk_present = [c for c in JOIN_ON if c in df.columns and c in result.columns]
+        if not pk_present:
+            logger.warning("Skipping join — no common key columns")
+            continue
+        new_cols = [c for c in df.columns if c not in result.columns]
+        if not new_cols:
+            continue
+        result = result.merge(df[pk_present + new_cols], on=pk_present, how="left")
+        logger.info("Joined %d new columns; result now %d cols", len(new_cols), len(result.columns))
 
-        # Among remaining candidates, prefer files with "5300" in the name;
-        # otherwise fall back to the largest file.
-        preferred = [m for m in candidates if "5300" in m.filename]
-        target = preferred[0] if preferred else max(candidates, key=lambda m: m.file_size)
-
-        zf.extract(target, extract_dir)
-        csv_path = extract_dir / target.filename
-        logger.info("Extracted %s (%.1f MB)", target.filename, target.file_size / 1e6)
-        return str(csv_path)
+    result.to_csv(combined_path, index=False)
+    logger.info("Combined CSV: %d rows × %d cols → %s", len(result), len(result.columns), combined_path)
+    return str(combined_path)
 
 
 def _period_from_cycle_date(series: pd.Series) -> pd.Series:
@@ -217,6 +276,10 @@ def parse_csv(csv_path: str) -> pd.DataFrame:
     df.columns = [c.strip() for c in df.columns]
 
     combined_map = {**NCUA_FIELD_MAP, **NCUA_DELINQUENCY_FIELD_MAP}
+    mapped = {k for k in combined_map if k in df.columns}
+    unmapped = {k for k in combined_map if k not in df.columns}
+    logger.info("Field map: %d/%d source fields matched. Missing: %s",
+                len(mapped), len(combined_map), sorted(unmapped))
     df = df.rename(columns={k: v for k, v in combined_map.items() if k in df.columns})
 
     # Convert CYCLE_DATE → "2026Q1" format
@@ -226,10 +289,7 @@ def parse_csv(csv_path: str) -> pd.DataFrame:
     # Drop columns we don't need
     keep = set(combined_map.values()) | {"charter_number", "institution_name", "period", "state_code", "county_name"}
     df = df[[c for c in df.columns if c in keep]].copy()
-
-    unknown = set(df.columns) - keep
-    if unknown:
-        logger.debug("Unrecognised columns (ignored): %s", sorted(unknown))
+    logger.info("Kept columns after filter: %s", sorted(df.columns.tolist()))
 
     return df
 
