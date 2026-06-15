@@ -318,6 +318,8 @@ def parse_csv(csv_path: str) -> pd.DataFrame:
     logger.info("Field map: %d/%d source fields matched. Missing: %s",
                 len(mapped), len(combined_map), sorted(unmapped))
     df = df.rename(columns={k: v for k, v in combined_map.items() if k in df.columns})
+    # Drop duplicate columns that arise when multiple source keys map to the same target
+    df = df.loc[:, ~df.columns.duplicated(keep="last")]
 
     # Convert CYCLE_DATE → "2026Q1" format
     if "period" in df.columns:
