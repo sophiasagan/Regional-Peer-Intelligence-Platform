@@ -71,10 +71,10 @@ def fetch_sod_csv(year: int, dest_dir: str = "data/raw") -> pd.DataFrame:
     """Page through FDIC BankFind API and return all branch rows for the year."""
     from pathlib import Path
 
-    cache_path = Path(dest_dir) / f"fdic_sod_{year}.parquet"
+    cache_path = Path(dest_dir) / f"fdic_sod_{year}.csv"
     if cache_path.exists():
         logger.info("Using cached FDIC SOD %d", year)
-        return pd.read_parquet(cache_path)
+        return pd.read_csv(cache_path, dtype=str)
 
     logger.info("Fetching FDIC SOD %d from BankFind API", year)
     rows: list[dict] = []
@@ -92,7 +92,7 @@ def fetch_sod_csv(year: int, dest_dir: str = "data/raw") -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
     Path(dest_dir).mkdir(parents=True, exist_ok=True)
-    df.to_parquet(cache_path, index=False)
+    df.to_csv(cache_path, index=False)
     logger.info("Fetched %d branch rows for %d", len(df), year)
     return df
 

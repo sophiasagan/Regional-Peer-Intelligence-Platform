@@ -95,9 +95,11 @@ NCUA_DELINQUENCY_FIELD_MAP: dict[str, str] = {
     "NCAUTO2": "acct_550C2",      # used vehicle charge-offs
 }
 
+# NCUA changed URL format from call-report-data-{year}-Q{quarter}.zip
+# to call-report-data-{year}-{month:02d}.zip (month = quarter * 3)
 NCUA_BULK_URL_TEMPLATE = (
     "https://www.ncua.gov/files/publications/analysis/"
-    "call-report-data-{year}-Q{quarter}.zip"
+    "call-report-data-{year}-{month:02d}.zip"
 )
 
 _BIGINT_COLS = [
@@ -113,7 +115,8 @@ _FLOAT_COLS = ["acct_998", "acct_RB0172"]
 
 
 def build_download_url(year: int, quarter: int) -> str:
-    return NCUA_BULK_URL_TEMPLATE.format(year=year, quarter=quarter)
+    month = quarter * 3
+    return NCUA_BULK_URL_TEMPLATE.format(year=year, month=month)
 
 
 def download_bulk_zip(url: str, dest_dir: str) -> str:
