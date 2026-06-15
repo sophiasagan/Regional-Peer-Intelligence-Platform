@@ -59,7 +59,7 @@ def load_financials(period: str, db_url: str | None = None) -> pd.DataFrame:
 
 
 def _compute_distribution(values: pd.Series) -> dict:
-    clean = values.replace([float("inf"), float("-inf")], pd.NA).dropna()
+    clean = values.replace({float("inf"): pd.NA, float("-inf"): pd.NA}).dropna()
     if len(clean) < 5:
         return {}
     return {
