@@ -126,6 +126,12 @@ def download_bulk_zip(url: str, dest_dir: str) -> str:
     if not zip_path.exists():
         logger.info("Downloading %s", url)
         with requests.get(url, stream=True, timeout=300) as resp:
+            if resp.status_code == 404:
+                raise FileNotFoundError(
+                    f"NCUA has not published data at {url}. "
+                    "Verify the current download URL at "
+                    "https://www.ncua.gov/analysis/credit-union-corporate-call-report-data/quarterly-data"
+                )
             resp.raise_for_status()
             with open(zip_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=1024 * 1024):

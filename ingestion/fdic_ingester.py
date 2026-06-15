@@ -26,8 +26,7 @@ from db import fdic_deposits, get_engine
 logger = logging.getLogger(__name__)
 
 FDIC_API_BASE = "https://banks.data.fdic.gov/api"
-# SOD report date is June 30 of each year
-_SOD_REPORT_DATE_TMPL = "{year}0630"
+# SOD data is keyed by calendar year (June 30 snapshot; use YEAR filter, not REPDTE)
 _PAGE_SIZE = 10_000
 _REQUEST_DELAY = 0.1  # seconds between paginated requests
 
@@ -50,11 +49,11 @@ _API_FIELDS = ",".join(FDIC_FIELD_MAP.keys())
 
 
 def _get_page(year: int, offset: int) -> list[dict]:
-    """Fetch one page of branch data from FDIC BankFind API."""
+    """Fetch one page of SOD data from FDIC BankFind Suite API."""
     resp = requests.get(
-        f"{FDIC_API_BASE}/branches",
+        f"{FDIC_API_BASE}/sod",
         params={
-            "filters": f"REPDTE:{_SOD_REPORT_DATE_TMPL.format(year=year)}",
+            "filters": f"YEAR:{year}",
             "fields": _API_FIELDS,
             "limit": _PAGE_SIZE,
             "offset": offset,
