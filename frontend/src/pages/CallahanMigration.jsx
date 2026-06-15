@@ -615,7 +615,7 @@ export default function CallahanMigration({
   onComplete,
 }) {
   const [charterInput,     setCharterInput]     = useState(charterNumberProp ?? '68708');
-  const [periodInput,      setPeriodInput]      = useState(periodProp        ?? '2026Q1');
+  const [periodInput,      setPeriodInput]      = useState(periodProp        ?? '2025Q4');
   const charterNumber = charterInput  || charterNumberProp;
   const period        = periodInput   || periodProp;
 
@@ -655,7 +655,7 @@ export default function CallahanMigration({
             type="text"
             value={periodInput}
             onChange={e => setPeriodInput(e.target.value)}
-            placeholder="e.g. 2026Q1"
+            placeholder="e.g. 2025Q4"
             style={{ width: 76, padding: '1px 6px', fontSize: 12, border: '1px solid #ccc', borderRadius: 4 }}
           />
         </span>
