@@ -76,7 +76,7 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     df["alll_coverage"] = allowance / delinq
     df["alll_to_loans"] = allowance / loans
 
-    nw = df.get("acct_997", pd.Series(dtype=float, index=df.index))
+    nw = df.get("acct_797", pd.Series(dtype=float, index=df.index))
     df["net_worth_ratio"] = nw / assets
 
     inc = df.get("acct_661A", pd.Series(dtype=float, index=df.index))

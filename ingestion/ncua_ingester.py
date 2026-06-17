@@ -44,8 +44,8 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_010": "acct_010",
     "ACCT_018": "acct_018",
     "ACCT_025B": "acct_025B",
-    # ACCT_997 and ACCT_998 are computed in _extract_main_csv from 797 components
-    "ACCT_997": "acct_997",
+    # ACCT_997 is computed in _extract_main_csv by summing 797 components → store in acct_797
+    "ACCT_997": "acct_797",
     "ACCT_998": "acct_998",
     # members
     "ACCT_083": "acct_083",
@@ -117,7 +117,7 @@ NCUA_BULK_URL_TEMPLATE = (
 )
 
 _BIGINT_COLS = [
-    "acct_010", "acct_018", "acct_025B", "acct_997",
+    "acct_010", "acct_018", "acct_025B", "acct_797",
     "acct_020B", "acct_DL0141", "acct_021B", "acct_022B", "acct_023B",
     "acct_041B", "acct_041A", "acct_DL0145", "acct_DL0146",
     "acct_550", "acct_551", "acct_680", "acct_550C1", "acct_550C2",
@@ -372,7 +372,7 @@ def compute_derived_ratios(df: pd.DataFrame) -> pd.DataFrame:
     df["alll_coverage"] = allowance / delinq
     df["alll_to_loans"] = allowance / loans
 
-    nw = df.get("acct_997", pd.Series(dtype=float, index=df.index))
+    nw = df.get("acct_797", pd.Series(dtype=float, index=df.index))
     df["nwratio"] = nw / assets
 
     return df
