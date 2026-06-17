@@ -257,9 +257,9 @@ def _compute_preview_metrics(
         for callahan_name, p76_key, fmt, is_adverse in PREVIEW_METRICS:
             inst_value = inst.get(p76_key)
             try:
-                dist = compute_peer_distribution(charter_number, period, p76_key, peer_charters_int, db_url)
+                dist = compute_peer_distribution(p76_key, peer_charters_int, period, db_url)
                 pctile = rank_institution(inst_value, dist, p76_key) if inst_value is not None else None
-                stars  = assign_stars(pctile, is_adverse) if pctile is not None else None
+                stars  = assign_stars(pctile) if pctile is not None else None
             except Exception:
                 dist, pctile, stars = {}, None, None
 

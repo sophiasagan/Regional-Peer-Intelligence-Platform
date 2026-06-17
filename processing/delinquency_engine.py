@@ -70,13 +70,13 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     rec = df.get("acct_551", pd.Series(dtype=float, index=df.index))
     df["chargeoff_rate_total_annualized"] = (co - rec) / loans * 4
 
-    allowance = df.get("acct_AS0048", pd.Series(dtype=float, index=df.index))
+    allowance = pd.to_numeric(df.get("acct_AS0048", pd.Series(dtype=float, index=df.index)), errors="coerce")
     if "acct_719" in df.columns:
-        allowance = allowance.fillna(df["acct_719"])
+        allowance = allowance.combine_first(pd.to_numeric(df["acct_719"], errors="coerce"))
     df["alll_coverage"] = allowance / delinq
     df["alll_to_loans"] = allowance / loans
 
-    nw = df.get("acct_797", pd.Series(dtype=float, index=df.index))
+    nw = df.get("acct_997", pd.Series(dtype=float, index=df.index))
     df["net_worth_ratio"] = nw / assets
 
     inc = df.get("acct_661A", pd.Series(dtype=float, index=df.index))
