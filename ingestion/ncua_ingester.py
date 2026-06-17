@@ -267,7 +267,8 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
     # Sum them to produce ACCT_997 (total net worth) and ACCT_998 (net worth ratio).
     nw_cols = [c for c in result.columns if c.startswith("ACCT_797") and len(c) == 9]
     if nw_cols:
-        result["ACCT_997"] = result[nw_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1, skipna=True)
+        # min_count=1: returns NaN (not 0) when all component values are NaN
+        result["ACCT_997"] = result[nw_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=1)
         logger.info("Computed ACCT_997 from components: %s", nw_cols)
     if "ACCT_997" in result.columns and "ACCT_010" in result.columns:
         nw = pd.to_numeric(result["ACCT_997"], errors="coerce")
