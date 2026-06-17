@@ -44,7 +44,8 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_010": "acct_010",
     "ACCT_018": "acct_018",
     "ACCT_025B": "acct_025B",
-    # ACCT_997 is computed in _extract_main_csv by summing 797 components → store in acct_797
+    # ACCT_997 = Total Net Worth (FS220A.txt) → stored in acct_797 (existing DB column)
+    # ACCT_998 = Net Worth Ratio (FS220A.txt) → stored in acct_998
     "ACCT_997": "acct_797",
     "ACCT_998": "acct_998",
     # members
@@ -263,18 +264,9 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
         result = result.merge(df[pk_present + new_cols], on=pk_present, how="left")
         logger.info("Joined %d new columns; result now %d cols", len(new_cols), len(result.columns))
 
-    # NCUA publishes net worth as components 797A…797E (not a single ACCT_797 total).
-    # Sum them to produce ACCT_997 (total net worth) and ACCT_998 (net worth ratio).
-    nw_cols = [c for c in result.columns if c.startswith("ACCT_797") and len(c) == 9]
-    if nw_cols:
-        # min_count=1: returns NaN (not 0) when all component values are NaN
-        result["ACCT_997"] = result[nw_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=1)
-        logger.info("Computed ACCT_997 from components: %s", nw_cols)
-    if "ACCT_997" in result.columns and "ACCT_010" in result.columns:
-        nw = pd.to_numeric(result["ACCT_997"], errors="coerce")
-        assets = pd.to_numeric(result["ACCT_010"], errors="coerce").replace(0, np.nan)
-        result["ACCT_998"] = nw / assets
-        logger.info("Computed ACCT_998 (net worth ratio)")
+    # ACCT_997 (Total Net Worth) and ACCT_998 (Net Worth Ratio) come directly from
+    # FS220A.txt — do not overwrite them. ACCT_797A-E are SFAS 115 investment
+    # categories (Available-for-Sale securities), not net worth components.
 
     result.to_csv(combined_path, index=False)
     logger.info("Combined CSV: %d rows × %d cols → %s", len(result), len(result.columns), combined_path)
