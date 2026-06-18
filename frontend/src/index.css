@@ -149,6 +149,39 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .cm-value-prop__list li::before { content: "✓  "; color: var(--color-green); font-weight: 700; }
 .cm-value-prop__list li { font-size: 13px; padding-left: 4px; }
 
+/* ── PeerBandChart ── */
+.peer-band-chart        { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.chart-header           { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.chart-header-left      { display: flex; flex-direction: column; gap: 2px; }
+.chart-metric-title     { font-size: 16px; font-weight: 700; }
+.chart-period-label     { font-size: 12px; color: var(--text-muted); }
+.chart-header-right     { display: flex; align-items: center; gap: 10px; }
+.peer-group-pill        { background: #E3F2FD; color: #01579B; border: 1px solid #BBDEFB; border-radius: 20px; padding: 3px 12px; font-size: 11px; font-weight: 500; }
+.peer-group-pill.clickable { cursor: pointer; }
+.download-btn           { font-size: 11px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+.download-btn:hover     { background: var(--bg-gray); }
+.chart-placeholder      { padding: 48px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.chart-tooltip          { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+.tooltip-period         { font-weight: 600; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); }
+.percentile-bar-wrapper { margin-top: 12px; padding: 12px 0; }
+.percentile-text        { font-size: 13px; margin-bottom: 10px; }
+.polarity-note          { color: var(--text-muted); font-size: 12px; }
+.percentile-track       { position: relative; height: 8px; background: #E0E0E0; border-radius: 4px; margin-bottom: 4px; }
+.percentile-fill        { height: 100%; border-radius: 4px; transition: width .3s; }
+.percentile-marker      { position: absolute; top: -4px; width: 2px; height: 16px; background: #212121; transform: translateX(-50%); }
+.percentile-labels      { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.peer-list              { list-style: none; margin: 8px 0 12px; padding: 10px 12px; background: var(--bg-gray); border-radius: 6px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.peer-list-item         { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+.peer-list-name         { font-weight: 500; }
+.peer-list-charter      { font-size: 11px; }
+.annotation-list        { list-style: none; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.annotation-item        { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.ann-icon               { font-size: 13px; width: 16px; text-align: center; }
+.ann-period             { font-weight: 600; color: var(--text-muted); min-width: 50px; }
+.ann-text               { color: var(--text); }
+.ann-top                { color: #0F6E56; }
+.ann-bottom             { color: #993C1D; }
+
 /* ── Competitor table ── */
 .competitor-table-wrapper { display: flex; flex-direction: column; height: 100%; }
 .ct-header            { padding: 12px 16px; border-bottom: 1px solid var(--border); }

@@ -164,7 +164,8 @@ function InstDot({ cx, cy, payload, annotations }) {
 }
 
 // Percentile bar displayed below chart.
-function PercentileBar({ adjustedRank, peerCount, isAdverse, callahanLabel }) {
+function PercentileBar({ adjustedRank, peerCount, isAdverse, callahanLabel, peerDetails }) {
+  const [showPeers, setShowPeers] = React.useState(false);
   if (adjustedRank == null) return null;
   const pct  = adjustedRank.toFixed(0);
   const good = adjustedRank >= 50;
@@ -174,11 +175,32 @@ function PercentileBar({ adjustedRank, peerCount, isAdverse, callahanLabel }) {
     <div className="percentile-bar-wrapper">
       <div className="percentile-text">
         Your institution is at the <strong>{pct}th percentile</strong>
-        {' '}among {peerCount} peer institutions
+        {' '}among{' '}
+        {peerDetails?.length > 0 ? (
+          <button
+            className="cm-link-btn"
+            onClick={() => setShowPeers(v => !v)}
+            style={{ fontWeight: 600 }}
+          >
+            {peerCount ?? peerDetails.length} peer institutions
+          </button>
+        ) : (
+          <span>{peerCount} peer institutions</span>
+        )}
         {isAdverse && (
           <span className="polarity-note"> — lower {callahanLabel} = better</span>
         )}
       </div>
+      {showPeers && peerDetails?.length > 0 && (
+        <ul className="peer-list">
+          {peerDetails.map(p => (
+            <li key={p.charter_number} className="peer-list-item">
+              <span className="peer-list-name">{p.institution_name}</span>
+              <span className="peer-list-charter muted">#{p.charter_number}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="percentile-track" role="meter" aria-valuenow={adjustedRank} aria-valuemin={0} aria-valuemax={100}>
         <div className="percentile-fill" style={{ width: `${adjustedRank}%`, backgroundColor: barColor }} />
         <div className="percentile-marker" style={{ left: `${adjustedRank}%` }} />
@@ -284,6 +306,7 @@ export default function PeerBandChart({
   const [apiData,        setApiData]        = useState(null);
   const [regionalApiData, setRegionalApiData] = useState(null);
   const [meta,           setMeta]           = useState(null);
+  const [peerDetails,    setPeerDetails]    = useState(null);
   const [loading,        setLoading]        = useState(false);
 
   // Fetch main peer group data
@@ -297,7 +320,11 @@ export default function PeerBandChart({
     )
       .then(r => r.ok ? r.json() : null)
       .then(res => {
-        if (res) { setMeta(res); setApiData(res.data ?? []); }
+        if (res) {
+          setMeta(res);
+          setApiData(res.data ?? []);
+          if (res.peer_details) setPeerDetails(res.peer_details);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -528,6 +555,7 @@ export default function PeerBandChart({
         peerCount={lastPoint?.peer_count}
         isAdverse={isAdverse}
         callahanLabel={callahanLabel}
+        peerDetails={peerDetails}
       />
 
       {/* ── Annotation summary (crossovers, decile entries) ── */}

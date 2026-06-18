@@ -737,6 +737,24 @@ async def get_metric_trend_onboarding(
 
     callahan_label, unit = METRIC_LABELS.get(metric_name, (metric_name, "%"))
 
+    # Look up peer institution names for the list display
+    peer_details = []
+    if peer_charters:
+        with engine.connect() as conn:
+            name_rows = conn.execute(
+                text("""
+                    SELECT DISTINCT ON (charter_number) charter_number, institution_name
+                    FROM institutions_quarterly
+                    WHERE charter_number = ANY(:charters)
+                    ORDER BY charter_number, period DESC
+                """),
+                {"charters": peer_charters},
+            ).fetchall()
+        peer_details = [
+            {"charter_number": r[0], "institution_name": r[1] or f"Charter {r[0]}"}
+            for r in name_rows
+        ]
+
     return {
         "charter_number":   charter_number,
         "metric":           metric_name,
@@ -744,6 +762,7 @@ async def get_metric_trend_onboarding(
         "unit":             unit,
         "peer_group_type":  peer_group,
         "peer_group_label": label,
+        "peer_details":     peer_details,
         "data":             result_rows,
     }
 
