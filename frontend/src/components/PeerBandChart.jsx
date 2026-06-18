@@ -267,6 +267,7 @@ export default function PeerBandChart({
   period,
   peerGroup = 'REGIONAL',
   nPeriods  = 12,
+  apiBase   = '/peer-comparison',   // override for auth-exempt contexts (e.g. onboarding wizard)
   token,
   // Optional override props (skip fetch when provided)
   institutionData,
@@ -291,8 +292,8 @@ export default function PeerBandChart({
     if (!charterNumber || !metric || !period) return;
     setLoading(true);
     fetch(
-      `${API}/peer-comparison/${charterNumber}/metric/${metric}?period=${period}&peer_group=${peerGroup}&n_periods=${nPeriods}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      `${API}${apiBase}/${charterNumber}/metric/${metric}?period=${period}&peer_group=${peerGroup}&n_periods=${nPeriods}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
       .then(res => {
@@ -300,20 +301,20 @@ export default function PeerBandChart({
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [metric, charterNumber, period, peerGroup, nPeriods, token, institutionData]);
+  }, [metric, charterNumber, period, peerGroup, nPeriods, apiBase, token, institutionData]);
 
   // Fetch REGIONAL data as comparison line when main peer group is not REGIONAL
   useEffect(() => {
     if (institutionData || peerGroup === 'REGIONAL') { setRegionalApiData(null); return; }
     if (!charterNumber || !metric || !period) return;
     fetch(
-      `${API}/peer-comparison/${charterNumber}/metric/${metric}?period=${period}&peer_group=REGIONAL&n_periods=${nPeriods}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      `${API}${apiBase}/${charterNumber}/metric/${metric}?period=${period}&peer_group=REGIONAL&n_periods=${nPeriods}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
       .then(res => res && setRegionalApiData(res.data ?? []))
       .catch(console.error);
-  }, [metric, charterNumber, period, peerGroup, nPeriods, token, institutionData]);
+  }, [metric, charterNumber, period, peerGroup, nPeriods, apiBase, token, institutionData]);
 
   const handleDownload = useCallback(() => {
     exportCsv(plotData, metric, charterNumber, period,

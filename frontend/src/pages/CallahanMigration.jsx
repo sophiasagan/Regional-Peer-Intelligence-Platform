@@ -562,9 +562,9 @@ function Step3({ charterNumber, period, token, peerGroupId, institutionState, on
           charterNumber={charterNumber}
           metric={metric}
           period={period}
-          nationalPeerGroupId={peerGroupId}
-          showRegionalPeers
-          peerGroupLabel={`National (Callahan-equivalent) + Regional peers — ${stateName}`}
+          apiBase="/onboarding/metric-trend"
+          peerGroup="REGIONAL"
+          peerGroupLabel={`Regional peers — ${stateName}`}
           token={token}
         />
       </div>

@@ -671,6 +671,83 @@ async def verify_callahan(
     )
 
 
+@router.get("/metric-trend/{charter_number}/metric/{metric_name}")
+async def get_metric_trend_onboarding(
+    request: Request,
+    charter_number: int,
+    metric_name: str,
+    period: str = Query(...),
+    peer_group: str = Query(default="REGIONAL"),
+    n_periods: int = Query(default=12),
+):
+    """Auth-exempt metric trend for PeerBandChart in the onboarding wizard (Step 3).
+
+    Returns the same shape as /peer-comparison/{charter}/metric/{metric} so
+    PeerBandChart can be pointed here via apiBase="/onboarding/metric-trend".
+    """
+    import pandas as pd
+    from db import get_engine, institutions_quarterly
+    from sqlalchemy import select
+    from processing.delinquency_engine import compute_peer_distribution, compute_ratios
+    from processing.early_warning_engine import _trailing_periods
+    from processing.peer_engine import PeerGroupType, build_peer_group, peer_group_label
+    from api.routers.peer_comparison import METRIC_LABELS
+
+    tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
+    periods = _trailing_periods(period, n=n_periods)
+
+    group_type = PeerGroupType(peer_group)
+    try:
+        peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
+    except Exception:
+        peer_charters = []
+    label = peer_group_label(group_type, charter_number, period, DB_URL)
+
+    engine = get_engine(DB_URL)
+    result_rows = []
+
+    for p in periods:
+        with engine.connect() as conn:
+            inst_result = conn.execute(
+                select(institutions_quarterly).where(
+                    institutions_quarterly.c.charter_number == charter_number,
+                    institutions_quarterly.c.period == p,
+                )
+            )
+            inst_rows = inst_result.mappings().all()
+
+        if not inst_rows:
+            inst_val = None
+        else:
+            inst_df = compute_ratios(pd.DataFrame([dict(r) for r in inst_rows]))
+            raw = inst_df[metric_name].iloc[0] if metric_name in inst_df.columns else None
+            inst_val = float(raw) if raw is not None else None
+
+        dist = compute_peer_distribution(metric_name, peer_charters, p, DB_URL) if peer_charters else {}
+        result_rows.append({
+            "period": p,
+            "institution_value": inst_val,
+            "peer_p10":   dist.get("p10"),
+            "peer_p25":   dist.get("p25"),
+            "peer_p50":   dist.get("p50"),
+            "peer_p75":   dist.get("p75"),
+            "peer_p90":   dist.get("p90"),
+            "peer_count": dist.get("n", 0),
+        })
+
+    callahan_label, unit = METRIC_LABELS.get(metric_name, (metric_name, "%"))
+
+    return {
+        "charter_number":   charter_number,
+        "metric":           metric_name,
+        "callahan_label":   callahan_label,
+        "unit":             unit,
+        "peer_group_type":  peer_group,
+        "peer_group_label": label,
+        "data":             result_rows,
+    }
+
+
 @router.get("/regional-context/{charter_number}", response_model=RegionalContextResponse)
 async def get_regional_context(
     request: Request,
