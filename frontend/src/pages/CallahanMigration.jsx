@@ -20,6 +20,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PeerBandChart from '../components/PeerBandChart';
 import ConfidenceBadge from '../components/ConfidenceBadge';
 
@@ -619,6 +620,7 @@ export default function CallahanMigration({
   token,
   onComplete,
 }) {
+  const navigate = useNavigate();
   const [charterInput,     setCharterInput]     = useState(charterNumberProp ?? '68708');
   const [periodInput,      setPeriodInput]      = useState(periodProp        ?? '2025Q4');
   const charterNumber = charterInput  || charterNumberProp;
@@ -639,7 +641,11 @@ export default function CallahanMigration({
   }
 
   function handleFinish() {
-    if (onComplete) onComplete({ peerGroupId, institutionState });
+    if (onComplete) {
+      onComplete({ peerGroupId, institutionState });
+    } else {
+      navigate('/credit-quality');
+    }
   }
 
   return (
