@@ -199,6 +199,15 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .sp-name              { flex: 1; font-weight: 500; }
 .sp-meta              { font-size: 11px; white-space: nowrap; }
 .sp-footer            { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.sp-tier-bar          { display: flex; align-items: center; gap: 0; border-bottom: 1px solid var(--border); background: #F8F8FF; }
+.sp-tier-btn          { flex: 1; padding: 7px 10px; background: none; border: none; border-right: 1px solid var(--border); cursor: pointer; font-size: 11px; color: var(--text-muted); text-align: center; transition: background .15s; }
+.sp-tier-btn:last-child { border-right: none; border-left: 1px solid var(--border); }
+.sp-tier-btn:hover:not(:disabled) { background: #E8EAF6; color: #1A237E; }
+.sp-tier-btn--on      { background: #E8EAF6; color: #1A237E; font-weight: 600; }
+.sp-tier-btn:disabled { opacity: .35; cursor: default; }
+.sp-tier-current      { flex: 0 0 auto; padding: 7px 14px; font-size: 12px; font-weight: 600; text-align: center; color: var(--text); }
+.sp-tier-header       { padding: 5px 14px 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #1A237E; background: #E8EAF6; }
+.sp-tier-header--adjacent { color: var(--text-muted); background: #F5F5F5; }
 
 /* ── Competitor table ── */
 .competitor-table-wrapper { display: flex; flex-direction: column; height: 100%; }

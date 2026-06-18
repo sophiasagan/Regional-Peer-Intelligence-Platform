@@ -37,6 +37,24 @@ router = APIRouter()
 
 DB_URL = os.environ.get("DATABASE_URL")
 
+# Six-tier asset ladder — ordered smallest → largest.
+# Used for peer-list tier expansion (±N tiers).
+_ASSET_TIERS: list[tuple[str, str, float, float]] = [
+    ("under_100m", "Under $100M",     0,                 100_000_000),
+    ("100m_250m",  "$100M – $250M",   100_000_000,       250_000_000),
+    ("250m_500m",  "$250M – $500M",   250_000_000,       500_000_000),
+    ("500m_1b",    "$500M – $1B",     500_000_000,     1_000_000_000),
+    ("1b_5b",      "$1B – $5B",     1_000_000_000,     5_000_000_000),
+    ("5b_plus",    "$5B+",          5_000_000_000, 999_000_000_000_000),
+]
+
+
+def _tier_index(assets: float) -> int:
+    for i, (_, _, lo, hi) in enumerate(_ASSET_TIERS):
+        if lo <= assets < hi:
+            return i
+    return len(_ASSET_TIERS) - 1
+
 # Callahan display names for internal metric names
 METRIC_LABELS: dict[str, tuple[str, str]] = {
     # (callahan_label, unit)
@@ -131,45 +149,120 @@ async def get_peer_list(
     charter_number: int,
     period: str = Query(...),
     peer_group: Literal["REGIONAL", "STATE", "ASSET_SIZE"] = Query(default="REGIONAL"),
+    expand_below: int = Query(default=0, ge=0, le=5),
+    expand_above: int = Query(default=0, ge=0, le=5),
 ):
-    """Return institutions in the peer group with names and assets — used by Select Peers UI."""
+    """Return institutions in the peer group with names, assets, and tier labels.
+
+    expand_below / expand_above extend the asset range by N tiers in each direction
+    (e.g. expand_below=1 adds the next-smaller tier).  New-tier institutions are
+    flagged so the UI can start them unchecked.
+    """
     tenant_id = request.state.tenant_id
     engine = get_engine(DB_URL)
-    group_type = PeerGroupType(peer_group)
-    peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
-    label = peer_group_label(group_type, charter_number, period, DB_URL)
 
+    # ── 1. Resolve base peer group ────────────────────────────────────────────
+    group_type    = PeerGroupType(peer_group)
+    base_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
+    label         = peer_group_label(group_type, charter_number, period, DB_URL)
+    base_set      = set(base_charters)
+
+    # ── 2. Get institution's own assets + state ───────────────────────────────
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
+        inst_row = conn.execute(
+            text("SELECT acct_010, state_code FROM institutions_quarterly "
+                 "WHERE charter_number = :c AND period = :p LIMIT 1"),
+            {"c": charter_number, "p": period},
+        ).mappings().first()
+
+    inst_assets = float(inst_row["acct_010"]) if inst_row and inst_row["acct_010"] else 0
+    inst_state  = inst_row["state_code"] if inst_row else None
+    base_idx    = _tier_index(inst_assets)
+
+    # ── 3. Determine expanded asset range ─────────────────────────────────────
+    lo_idx = max(0,                      base_idx - expand_below)
+    hi_idx = min(len(_ASSET_TIERS) - 1,  base_idx + expand_above)
+    asset_lo = _ASSET_TIERS[lo_idx][2]
+    asset_hi = _ASSET_TIERS[hi_idx][3]
+
+    # ── 4. Fetch all qualifying institutions ──────────────────────────────────
+    if expand_below == 0 and expand_above == 0:
+        # Fast path: just look up base charters
+        query_sql = text("""
+            SELECT DISTINCT ON (charter_number)
+                charter_number, institution_name, state_code, acct_010
+            FROM institutions_quarterly
+            WHERE charter_number = ANY(:charters) AND period = :period
+            ORDER BY charter_number, acct_010 DESC NULLS LAST
+        """)
+        params = {"charters": list(base_set), "period": period}
+    else:
+        # Expanded path: same geographic filter + wider asset band
+        if peer_group == "REGIONAL" and inst_state:
+            query_sql = text("""
                 SELECT DISTINCT ON (charter_number)
                     charter_number, institution_name, state_code, acct_010
                 FROM institutions_quarterly
-                WHERE charter_number = ANY(:charters) AND period = :period
+                WHERE period = :period
+                  AND state_code = :state
+                  AND acct_010 BETWEEN :lo AND :hi
                 ORDER BY charter_number, acct_010 DESC NULLS LAST
-            """),
-            {"charters": peer_charters, "period": period},
-        ).fetchall() if peer_charters else []
+            """)
+            params = {"period": period, "state": inst_state, "lo": asset_lo, "hi": asset_hi}
+        else:
+            query_sql = text("""
+                SELECT DISTINCT ON (charter_number)
+                    charter_number, institution_name, state_code, acct_010
+                FROM institutions_quarterly
+                WHERE period = :period
+                  AND acct_010 BETWEEN :lo AND :hi
+                ORDER BY charter_number, acct_010 DESC NULLS LAST
+            """)
+            params = {"period": period, "lo": asset_lo, "hi": asset_hi}
 
-    institutions = sorted(
-        [
-            {
-                "charter_number": int(r[0]),
-                "institution_name": r[1] or f"Charter {r[0]}",
-                "state": r[2],
-                "total_assets": int(r[3]) if r[3] else None,
-            }
-            for r in rows
-        ],
-        key=lambda x: -(x["total_assets"] or 0),
-    )
+    with engine.connect() as conn:
+        rows = conn.execute(query_sql, params).fetchall()
+
+    # ── 5. Annotate each institution with its tier ────────────────────────────
+    institutions = []
+    for r in rows:
+        assets    = int(r[3]) if r[3] else None
+        tier_idx  = _tier_index(float(assets)) if assets else base_idx
+        _, tier_label, _, _ = _ASSET_TIERS[tier_idx]
+        institutions.append({
+            "charter_number":   int(r[0]),
+            "institution_name": r[1] or f"Charter {r[0]}",
+            "state":            r[2],
+            "total_assets":     assets,
+            "tier_label":       tier_label,
+            "is_base_tier":     (tier_idx == base_idx),
+            "in_base_group":    (int(r[0]) in base_set),
+        })
+
+    institutions.sort(key=lambda x: (
+        0 if x["in_base_group"] else 1,        # base group first
+        -_tier_index(x["total_assets"] or 0),  # then largest tier first
+        -(x["total_assets"] or 0),
+    ))
+
+    # Tiers available for expansion (for UI button state)
+    available_below = base_idx > 0
+    available_above = base_idx < len(_ASSET_TIERS) - 1
+    base_tier_label = _ASSET_TIERS[base_idx][1]
+    below_tier_label = _ASSET_TIERS[base_idx - 1][1] if base_idx > 0 else None
+    above_tier_label = _ASSET_TIERS[base_idx + 1][1] if base_idx < len(_ASSET_TIERS) - 1 else None
 
     return {
-        "charter_number": charter_number,
-        "period": period,
-        "peer_group_type": peer_group,
-        "peer_group_label": label,
-        "institutions": institutions,
+        "charter_number":    charter_number,
+        "period":            period,
+        "peer_group_type":   peer_group,
+        "peer_group_label":  label,
+        "base_tier_label":   base_tier_label,
+        "below_tier_label":  below_tier_label,
+        "above_tier_label":  above_tier_label,
+        "available_below":   available_below,
+        "available_above":   available_above,
+        "institutions":      institutions,
     }
 
 

@@ -70,28 +70,43 @@ function downloadCsv(metrics, charterNumber, period, peerGroupLabel) {
 // ── Select Peers panel ────────────────────────────────────────────────────────
 
 function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }) {
-  const [institutions, setInstitutions] = useState([]);
-  const [checked,      setChecked]      = useState(new Set());
-  const [loading,      setLoading]      = useState(true);
+  const [data,        setData]        = useState(null);
+  const [checked,     setChecked]     = useState(new Set());
+  const [loading,     setLoading]     = useState(true);
+  const [expandBelow, setExpandBelow] = useState(false);
+  const [expandAbove, setExpandAbove] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API}/peer-comparison/${charterNumber}/peer-list?period=${period}&peer_group=${peerGroup}`)
+    const params = new URLSearchParams({
+      period,
+      peer_group:    peerGroup,
+      expand_below:  expandBelow ? 1 : 0,
+      expand_above:  expandAbove ? 1 : 0,
+    });
+    fetch(`${API}/peer-comparison/${charterNumber}/peer-list?${params}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.institutions) {
-          setInstitutions(data.institutions);
-          setChecked(new Set(data.institutions.map(i => i.charter_number)));
-        }
+      .then(res => {
+        if (!res) return;
+        setData(res);
+        // Base-group institutions start checked; adjacent-tier ones start unchecked
+        setChecked(prev => {
+          const next = new Set(prev);
+          res.institutions.forEach(i => {
+            if (i.in_base_group && !next.has(i.charter_number)) next.add(i.charter_number);
+          });
+          return next;
+        });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [charterNumber, period, peerGroup]);
+  }, [charterNumber, period, peerGroup, expandBelow, expandAbove]);
+
+  const institutions = data?.institutions ?? [];
 
   function toggleAll(val) {
     setChecked(val ? new Set(institutions.map(i => i.charter_number)) : new Set());
   }
-
   function toggle(ch) {
     setChecked(prev => {
       const next = new Set(prev);
@@ -103,11 +118,47 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
   const allChecked  = institutions.length > 0 && checked.size === institutions.length;
   const someChecked = checked.size > 0 && checked.size < institutions.length;
 
+  // Group by tier for section headers
+  const byTier = [];
+  let lastTier = null;
+  for (const inst of institutions) {
+    if (inst.tier_label !== lastTier) {
+      byTier.push({ type: 'header', label: inst.tier_label, isBase: inst.is_base_tier });
+      lastTier = inst.tier_label;
+    }
+    byTier.push({ type: 'inst', inst });
+  }
+
   return (
     <div className="select-peers-panel">
       <div className="sp-header">
         <span className="sp-title">Select peer institutions</span>
         <button className="sp-close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+
+      {/* Tier expansion toggles */}
+      <div className="sp-tier-bar">
+        <button
+          className={`sp-tier-btn ${expandBelow ? 'sp-tier-btn--on' : ''}`}
+          disabled={!data?.available_below}
+          onClick={() => setExpandBelow(v => !v)}
+          title={data?.below_tier_label ? `Include ${data.below_tier_label}` : 'No smaller tier'}
+        >
+          ← {data?.below_tier_label ?? 'Tier below'}
+        </button>
+
+        <span className="sp-tier-current" title="Current asset tier">
+          {data?.base_tier_label ?? '…'}
+        </span>
+
+        <button
+          className={`sp-tier-btn ${expandAbove ? 'sp-tier-btn--on' : ''}`}
+          disabled={!data?.available_above}
+          onClick={() => setExpandAbove(v => !v)}
+          title={data?.above_tier_label ? `Include ${data.above_tier_label}` : 'No larger tier'}
+        >
+          {data?.above_tier_label ?? 'Tier above'} →
+        </button>
       </div>
 
       {loading ? (
@@ -127,21 +178,27 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
           </div>
 
           <ul className="sp-list">
-            {institutions.map(inst => (
-              <li key={inst.charter_number} className="sp-item">
-                <label className="sp-label">
-                  <input
-                    type="checkbox"
-                    checked={checked.has(inst.charter_number)}
-                    onChange={() => toggle(inst.charter_number)}
-                  />
-                  <span className="sp-name">{inst.institution_name}</span>
-                  <span className="sp-meta muted">
-                    {inst.state}{inst.total_assets ? ` · ${fmtAssets(inst.total_assets)}` : ''}
-                  </span>
-                </label>
-              </li>
-            ))}
+            {byTier.map((item, i) =>
+              item.type === 'header' ? (
+                <li key={`h-${item.label}`} className={`sp-tier-header ${item.isBase ? '' : 'sp-tier-header--adjacent'}`}>
+                  {item.label}{item.isBase ? ' (base tier)' : ''}
+                </li>
+              ) : (
+                <li key={item.inst.charter_number} className="sp-item">
+                  <label className="sp-label">
+                    <input
+                      type="checkbox"
+                      checked={checked.has(item.inst.charter_number)}
+                      onChange={() => toggle(item.inst.charter_number)}
+                    />
+                    <span className="sp-name">{item.inst.institution_name}</span>
+                    <span className="sp-meta muted">
+                      {item.inst.state}{item.inst.total_assets ? ` · ${fmtAssets(item.inst.total_assets)}` : ''}
+                    </span>
+                  </label>
+                </li>
+              )
+            )}
           </ul>
 
           <div className="sp-footer">
