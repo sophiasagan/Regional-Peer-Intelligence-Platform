@@ -67,18 +67,20 @@ function useInstitutionInfo(charterNumber, period, token) {
   return info;
 }
 
-function usePeerComparison(charterNumber, period, peerGroup, token) {
+function usePeerComparison(charterNumber, period, peerGroup, token, customCharters) {
   const [data, setData] = useState(null);
   useEffect(() => {
     if (!charterNumber || !period) return;
+    const params = new URLSearchParams({ period, peer_group: peerGroup });
+    if (customCharters?.length) params.set('custom_charters', customCharters.join(','));
     fetch(
-      `${API}/peer-comparison/${charterNumber}?period=${period}&peer_group=${peerGroup}`,
+      `${API}/peer-comparison/${charterNumber}?${params}`,
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setData(d))
       .catch(console.error);
-  }, [charterNumber, period, peerGroup, token]);
+  }, [charterNumber, period, peerGroup, token, customCharters]);
   return data;
 }
 
@@ -229,11 +231,12 @@ function MetricSelector({ activeMetric, onSelect, comparison }) {
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function CreditQuality({ charterNumber = 68708, token }) {
-  const [period,       setPeriod]      = useState('2026Q1');
-  const [periodLabel,  setPeriodLabel] = useState('3Y');
-  const [nPeriods,     setNPeriods]    = useState(12);
-  const [peerGroup,    setPeerGroup]   = useState('REGIONAL');
-  const [activeMetric, setActiveMetric] = useState('delinq_rate_total');
+  const [period,         setPeriod]        = useState('2026Q1');
+  const [periodLabel,    setPeriodLabel]   = useState('3Y');
+  const [nPeriods,       setNPeriods]      = useState(12);
+  const [peerGroup,      setPeerGroup]     = useState('REGIONAL');
+  const [activeMetric,   setActiveMetric]  = useState('delinq_rate_total');
+  const [customCharters, setCustomCharters] = useState(null);  // null = use default peer group
 
   // Geography for SignalSeparator — defaults to institution's state
   const [geographyType, setGeographyType] = useState('state');
@@ -243,8 +246,12 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
   const loanBreakdownRef = React.useRef(null);
 
   const instInfo    = useInstitutionInfo(charterNumber, period, token);
-  const comparison  = usePeerComparison(charterNumber, period, peerGroup, token);
+  const comparison  = usePeerComparison(charterNumber, period, peerGroup, token, customCharters);
   const alerts      = useAlerts(charterNumber, period, peerGroup, token);
+
+  function handleCustomCharters(charters) {
+    setCustomCharters(charters);   // null resets to default peer group
+  }
 
   // Set geography default from institution's state once loaded
   useEffect(() => {
@@ -411,8 +418,10 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
               metrics={comparison?.metrics ?? []}
               charterNumber={charterNumber}
               period={period}
+              peerGroup={peerGroup}
               peerGroupLabel={peerLabel}
               peerCount={comparison?.peer_count}
+              onCustomCharters={handleCustomCharters}
             />
           </section>
 

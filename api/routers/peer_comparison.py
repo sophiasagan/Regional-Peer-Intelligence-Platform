@@ -125,6 +125,54 @@ async def get_institution_detail(
     )
 
 
+@router.get("/{charter_number}/peer-list")
+async def get_peer_list(
+    request: Request,
+    charter_number: int,
+    period: str = Query(...),
+    peer_group: Literal["REGIONAL", "STATE", "ASSET_SIZE"] = Query(default="REGIONAL"),
+):
+    """Return institutions in the peer group with names and assets — used by Select Peers UI."""
+    tenant_id = request.state.tenant_id
+    engine = get_engine(DB_URL)
+    group_type = PeerGroupType(peer_group)
+    peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
+    label = peer_group_label(group_type, charter_number, period, DB_URL)
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT DISTINCT ON (charter_number)
+                    charter_number, institution_name, state_code, acct_010
+                FROM institutions_quarterly
+                WHERE charter_number = ANY(:charters) AND period = :period
+                ORDER BY charter_number, acct_010 DESC NULLS LAST
+            """),
+            {"charters": peer_charters, "period": period},
+        ).fetchall() if peer_charters else []
+
+    institutions = sorted(
+        [
+            {
+                "charter_number": int(r[0]),
+                "institution_name": r[1] or f"Charter {r[0]}",
+                "state": r[2],
+                "total_assets": int(r[3]) if r[3] else None,
+            }
+            for r in rows
+        ],
+        key=lambda x: -(x["total_assets"] or 0),
+    )
+
+    return {
+        "charter_number": charter_number,
+        "period": period,
+        "peer_group_type": peer_group,
+        "peer_group_label": label,
+        "institutions": institutions,
+    }
+
+
 @router.get("/{charter_number}", response_model=PeerComparisonResponse)
 async def get_peer_comparison(
     request: Request,
@@ -132,6 +180,10 @@ async def get_peer_comparison(
     period: str = Query(...),
     peer_group: Literal["REGIONAL", "STATE", "ASSET_SIZE", "CUSTOM"] = Query(default="REGIONAL"),
     custom_group_name: Optional[str] = Query(default=None),
+    custom_charters: Optional[str] = Query(
+        default=None,
+        description="Comma-separated charter numbers — overrides peer_group when provided",
+    ),
 ):
     tenant_id = request.state.tenant_id
     engine = get_engine(DB_URL)
@@ -153,10 +205,14 @@ async def get_peer_comparison(
     inst_row = inst_df.iloc[0]
     institution_name = str(inst_row.get("institution_name", f"Charter {charter_number}"))
 
-    # Build peer group
-    group_type = PeerGroupType(peer_group)
-    peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, custom_group_name, DB_URL)
-    label = peer_group_label(group_type, charter_number, period, DB_URL)
+    # Build peer group — custom_charters overrides peer_group when provided
+    if custom_charters:
+        peer_charters = [int(c.strip()) for c in custom_charters.split(",") if c.strip().isdigit()]
+        label = f"Custom selection ({len(peer_charters)} institutions)"
+    else:
+        group_type = PeerGroupType(peer_group)
+        peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, custom_group_name, DB_URL)
+        label = peer_group_label(group_type, charter_number, period, DB_URL)
 
     # Build metric rows
     metric_rows = []

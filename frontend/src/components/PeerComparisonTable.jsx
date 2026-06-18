@@ -7,11 +7,11 @@
  *
  * Stars: 1–5 on every row (Callahan scale).
  * Download: full table as CSV — non-negotiable (P76 / Callahan rule).
- *
- * Column order: Metric | Your Value | Peer Median | Top Decile | Bottom Decile | Percentile | Stars
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+
+const API = import.meta.env.VITE_API_URL ?? '';
 
 function Stars({ count }) {
   if (count == null) return <span className="stars-empty">—</span>;
@@ -37,6 +37,13 @@ function fmt(value, unit) {
   }
 }
 
+function fmtAssets(v) {
+  if (!v) return '';
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  return `$${v.toLocaleString()}`;
+}
+
 function downloadCsv(metrics, charterNumber, period, peerGroupLabel) {
   if (!metrics?.length) return;
   const meta    = `Peer Group: ${peerGroupLabel},Charter: ${charterNumber},Period: ${period}`;
@@ -60,17 +67,129 @@ function downloadCsv(metrics, charterNumber, period, peerGroupLabel) {
   URL.revokeObjectURL(url);
 }
 
+// ── Select Peers panel ────────────────────────────────────────────────────────
+
+function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }) {
+  const [institutions, setInstitutions] = useState([]);
+  const [checked,      setChecked]      = useState(new Set());
+  const [loading,      setLoading]      = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API}/peer-comparison/${charterNumber}/peer-list?period=${period}&peer_group=${peerGroup}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.institutions) {
+          setInstitutions(data.institutions);
+          setChecked(new Set(data.institutions.map(i => i.charter_number)));
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [charterNumber, period, peerGroup]);
+
+  function toggleAll(val) {
+    setChecked(val ? new Set(institutions.map(i => i.charter_number)) : new Set());
+  }
+
+  function toggle(ch) {
+    setChecked(prev => {
+      const next = new Set(prev);
+      next.has(ch) ? next.delete(ch) : next.add(ch);
+      return next;
+    });
+  }
+
+  const allChecked  = institutions.length > 0 && checked.size === institutions.length;
+  const someChecked = checked.size > 0 && checked.size < institutions.length;
+
+  return (
+    <div className="select-peers-panel">
+      <div className="sp-header">
+        <span className="sp-title">Select peer institutions</span>
+        <button className="sp-close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+
+      {loading ? (
+        <div className="sp-loading">Loading…</div>
+      ) : (
+        <>
+          <div className="sp-controls">
+            <label className="sp-check-all">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                ref={el => el && (el.indeterminate = someChecked)}
+                onChange={e => toggleAll(e.target.checked)}
+              />
+              {checked.size} of {institutions.length} selected
+            </label>
+          </div>
+
+          <ul className="sp-list">
+            {institutions.map(inst => (
+              <li key={inst.charter_number} className="sp-item">
+                <label className="sp-label">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(inst.charter_number)}
+                    onChange={() => toggle(inst.charter_number)}
+                  />
+                  <span className="sp-name">{inst.institution_name}</span>
+                  <span className="sp-meta muted">
+                    {inst.state}{inst.total_assets ? ` · ${fmtAssets(inst.total_assets)}` : ''}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+
+          <div className="sp-footer">
+            <button
+              className="cm-btn cm-btn--primary"
+              disabled={checked.size === 0}
+              onClick={() => onApply([...checked])}
+            >
+              Apply ({checked.size})
+            </button>
+            <button className="cm-btn cm-btn--ghost" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function PeerComparisonTable({
   metrics = [],
   charterNumber,
   period,
+  peerGroup = 'REGIONAL',
   peerGroupLabel = '',
   peerCount,
+  onCustomCharters,   // (charters: number[] | null) => void
 }) {
+  const [showPanel, setShowPanel] = useState(false);
+
   const handleDownload = useCallback(
     () => downloadCsv(metrics, charterNumber, period, peerGroupLabel),
     [metrics, charterNumber, period, peerGroupLabel],
   );
+
+  function handleApply(selected) {
+    setShowPanel(false);
+    onCustomCharters?.(selected);
+  }
+
+  function handleReset() {
+    onCustomCharters?.(null);
+  }
+
+  const isCustom = peerGroupLabel.startsWith('Custom');
 
   return (
     <div className="peer-comparison-table-wrapper">
@@ -80,6 +199,18 @@ export default function PeerComparisonTable({
           <span className="peer-group-pill">{peerGroupLabel}</span>
           {peerCount != null && (
             <span className="peer-count-label">{peerCount} institutions</span>
+          )}
+          <button
+            className="cm-link-btn"
+            onClick={() => setShowPanel(v => !v)}
+            style={{ fontSize: 12 }}
+          >
+            {showPanel ? 'Close' : 'Select peers'}
+          </button>
+          {isCustom && (
+            <button className="cm-link-btn" onClick={handleReset} style={{ fontSize: 12, color: '#757575' }}>
+              Reset
+            </button>
           )}
         </div>
         <button
@@ -91,6 +222,16 @@ export default function PeerComparisonTable({
           Download CSV
         </button>
       </div>
+
+      {showPanel && charterNumber && period && (
+        <SelectPeersPanel
+          charterNumber={charterNumber}
+          period={period}
+          peerGroup={isCustom ? 'REGIONAL' : peerGroup}
+          onApply={handleApply}
+          onClose={() => setShowPanel(false)}
+        />
+      )}
 
       {metrics.length === 0 ? (
         <p className="table-empty">No comparison data available.</p>
