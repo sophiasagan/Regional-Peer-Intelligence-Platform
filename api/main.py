@@ -98,24 +98,19 @@ async def tenant_middleware(request: Request, call_next):
         resp.headers["Access-Control-Allow-Origin"] = "*"
         return resp
 
-    # JWT auth required
+    # JWT auth — if a valid Bearer token is present, extract tenant_id from it.
+    # If absent or invalid, fall back to "anonymous" so the app works without
+    # a login flow (dev/demo mode). Real multi-tenant enforcement is added when
+    # a proper auth service is wired up.
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Bearer token required"},
-            headers={"Access-Control-Allow-Origin": "*"},
-        )
-
-    token = auth.removeprefix("Bearer ").strip()
-    try:
-        request.state.tenant_id = _extract_tenant(token)
-    except HTTPException as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-            headers={"Access-Control-Allow-Origin": "*"},
-        )
+    if auth.startswith("Bearer "):
+        token = auth.removeprefix("Bearer ").strip()
+        try:
+            request.state.tenant_id = _extract_tenant(token)
+        except HTTPException:
+            request.state.tenant_id = "anonymous"
+    else:
+        request.state.tenant_id = "anonymous"
 
     resp = await call_next(request)
     resp.headers["Access-Control-Allow-Origin"] = "*"

@@ -58,7 +58,7 @@ function useInstitutionInfo(charterNumber, period, token) {
     if (!charterNumber || !period) return;
     fetch(
       `${API}/peer-comparison/institution/${charterNumber}?period=${period}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
       .then(data => data && setInfo(data))
@@ -73,7 +73,7 @@ function usePeerComparison(charterNumber, period, peerGroup, token) {
     if (!charterNumber || !period) return;
     fetch(
       `${API}/peer-comparison/${charterNumber}?period=${period}&peer_group=${peerGroup}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setData(d))
@@ -88,7 +88,7 @@ function useAlerts(charterNumber, period, peerGroup, token) {
     if (!charterNumber || !period) return;
     fetch(
       `${API}/alerts/${charterNumber}?period=${period}&peer_group=${peerGroup}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setAlerts(d.alerts ?? []))
@@ -228,7 +228,7 @@ function MetricSelector({ activeMetric, onSelect, comparison }) {
 
 // ── Main page ───────────────────────────────────────────────────────────────
 
-export default function CreditQuality({ charterNumber, token }) {
+export default function CreditQuality({ charterNumber = 68708, token }) {
   const [period,       setPeriod]      = useState('2026Q1');
   const [periodLabel,  setPeriodLabel] = useState('3Y');
   const [nPeriods,     setNPeriods]    = useState(12);
