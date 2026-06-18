@@ -496,9 +496,14 @@ function Step2({ charterNumber, period, token, peerGroupId, onComplete, onBack }
       )}
 
       {!result && (
-        <button className="cm-btn cm-btn--ghost" onClick={onBack}>
-          ← Back to peer group
-        </button>
+        <div className="cm-action-row">
+          <button className="cm-btn cm-btn--ghost" onClick={onBack}>
+            ← Back to peer group
+          </button>
+          <button className="cm-btn cm-btn--ghost" onClick={onComplete}>
+            Skip →
+          </button>
+        </div>
       )}
     </div>
   );
