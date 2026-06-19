@@ -1,6 +1,6 @@
 {
   "rootDirectory": "frontend",
-  "installCommand": "npm ci",
+  "installCommand": "rm -rf node_modules && npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
