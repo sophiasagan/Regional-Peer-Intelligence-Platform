@@ -42,53 +42,35 @@ const KPI_DEFS = [
   { metric: 'alll_coverage',                   label: 'ALLL Coverage Ratio',        unit: 'x', adverse: false },
 ];
 
-// Metric tabs — grouped by category, dividers separate groups
-// { divider: true, label } inserts a visual category separator
+// Metric tabs — grouped by category; only metrics with computed formulas are shown.
+// Per-product delinquency, growth rates, and market share tabs are omitted until
+// the corresponding NCUA fields and multi-period pipeline are available.
 const METRIC_TABS = [
   // ── Asset Quality ──────────────────────────────────────────────────────────
   { divider: true, label: 'Asset Quality' },
-  { value: 'delinq_rate_total',               label: 'Total Delinquency',      adverse: true  },
-  { value: 'delinq_rate_90plus',              label: '90+ Day Delinq',         adverse: true  },
-  { value: 'chargeoff_rate_total_annualized', label: 'Net Charge-Off',         adverse: true  },
-  { value: 'alll_coverage',                   label: 'ALLL Coverage',          adverse: false },
-  { value: 'alll_to_loans',                   label: 'ALLL to Loans',          adverse: false },
-  { value: 'non_accrual_rate',                label: 'Non-Accrual Rate',       adverse: true  },
-  { value: 'tdr_to_loans',                    label: 'TDR / Modifications',    adverse: true  },
-  // ── Delinquency by Loan Type ───────────────────────────────────────────────
-  { divider: true, label: 'Delinquency by Product' },
-  { value: 'delinq_rate_credit_card',         label: 'Credit Card Delinq',     adverse: true  },
-  { value: 'delinq_rate_auto_total',          label: 'Auto Delinquency',       adverse: true  },
-  { value: 'delinq_rate_first_mortgage',      label: '1st Mortgage Delinq',    adverse: true  },
-  { value: 'delinq_rate_commercial',          label: 'Non-Farm Non-RE Delinq', adverse: true  },
-  { value: 'delinq_rate_commercial_re',       label: 'Commercial RE Delinq',   adverse: true  },
+  { value: 'delinq_rate_total',               label: 'Total Delinquency'   },
+  { value: 'delinq_rate_90plus',              label: '90+ Day Delinq'      },
+  { value: 'chargeoff_rate_total_annualized', label: 'Net Charge-Off'      },
+  { value: 'alll_coverage',                   label: 'ALLL Coverage'       },
+  { value: 'alll_to_loans',                   label: 'ALLL to Loans'       },
+  { value: 'non_accrual_rate',                label: 'Non-Accrual Rate'    },
+  { value: 'tdr_to_loans',                    label: 'TDR / Modifications' },
   // ── Capital ────────────────────────────────────────────────────────────────
   { divider: true, label: 'Capital' },
-  { value: 'net_worth_ratio',                 label: 'Net Worth Ratio',        adverse: false },
-  { value: 'rbc_ratio',                       label: 'Risk-Based Capital',     adverse: false },
+  { value: 'net_worth_ratio',                 label: 'Net Worth Ratio'     },
+  { value: 'rbc_ratio',                       label: 'Risk-Based Capital'  },
   // ── Earnings ───────────────────────────────────────────────────────────────
   { divider: true, label: 'Earnings' },
-  { value: 'roa_annualized',                  label: 'Return on Assets',       adverse: false },
-  { value: 'nim',                             label: 'Net Interest Margin',    adverse: false },
-  { value: 'efficiency_ratio',                label: 'Efficiency Ratio',       adverse: true  },
-  // ── Lending ────────────────────────────────────────────────────────────────
+  { value: 'roa_annualized',                  label: 'Return on Assets'    },
+  { value: 'nim',                             label: 'Net Interest Margin' },
+  { value: 'efficiency_ratio',                label: 'Efficiency Ratio'    },
+  // ── Lending / Balance Sheet ────────────────────────────────────────────────
   { divider: true, label: 'Lending' },
-  { value: 'loan_to_share',                   label: 'Loan-to-Share Ratio',    adverse: false },
-  { value: 'loan_growth_rate',                label: 'Loan Growth',            adverse: false },
-  { value: 'acct_025B',                       label: 'Total Loans',            adverse: false },
-  // ── Growth ─────────────────────────────────────────────────────────────────
-  { divider: true, label: 'Growth' },
-  { value: 'member_growth_rate',              label: 'Member Growth',          adverse: false },
-  { value: 'share_growth_rate',               label: 'Share Growth',           adverse: false },
-  { value: 'asset_growth_rate',               label: 'Asset Growth',           adverse: false },
-  // ── Balance Sheet ──────────────────────────────────────────────────────────
-  { divider: true, label: 'Balance Sheet' },
-  { value: 'acct_010',                        label: 'Total Assets',           adverse: false },
-  { value: 'acct_018',                        label: 'Total Shares',           adverse: false },
-  { value: 'acct_083',                        label: 'Members',                adverse: false },
-  // ── Market Share ───────────────────────────────────────────────────────────
-  { divider: true, label: 'Market Share' },
-  { value: 'deposit_market_share_pct',        label: 'Deposit Market Share',   adverse: false },
-  { value: 'loan_market_share_pct',           label: 'Loan Market Share',      adverse: false },
+  { value: 'loan_to_share',                   label: 'Loan-to-Share Ratio' },
+  { value: 'acct_025B',                       label: 'Total Loans'         },
+  { value: 'acct_010',                        label: 'Total Assets'        },
+  { value: 'acct_018',                        label: 'Total Shares'        },
+  { value: 'acct_083',                        label: 'Members'             },
 ];
 
 const PERIOD_OPTIONS = [

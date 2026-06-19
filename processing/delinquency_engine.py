@@ -87,6 +87,30 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     nonint_inc = df.get("acct_117", pd.Series(dtype=float, index=df.index))
     df["efficiency_ratio"] = ni_exp / (ni_inc + nonint_inc).replace(0, np.nan)
 
+    # Net interest margin = net interest income / assets (annualized)
+    df["nim"] = ni_inc / assets * 4
+
+    # Loan-to-share ratio
+    shares = df.get("acct_018", pd.Series(dtype=float, index=df.index)).replace(0, np.nan)
+    df["loan_to_share"] = df.get("acct_025B", pd.Series(dtype=float, index=df.index)) / shares
+
+    # Risk-based capital ratio — stored directly as acct_RB0172
+    df["rbc_ratio"] = pd.to_numeric(
+        df.get("acct_RB0172", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    )
+
+    # Non-accrual rate = (non-commercial + commercial non-accrual) / total loans
+    non_accrual = (
+        df.get("acct_DL0145", pd.Series(0, index=df.index, dtype=float)).fillna(0)
+        + df.get("acct_DL0146", pd.Series(0, index=df.index, dtype=float)).fillna(0)
+    )
+    df["non_accrual_rate"] = non_accrual / loans
+
+    # TDR / loan modifications to total loans
+    df["tdr_to_loans"] = pd.to_numeric(
+        df.get("acct_1001F", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ) / loans
+
     return df
 
 

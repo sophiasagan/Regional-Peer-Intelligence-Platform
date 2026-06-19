@@ -57,18 +57,28 @@ def _tier_index(assets: float) -> int:
 
 # Callahan display names for internal metric names
 METRIC_LABELS: dict[str, tuple[str, str]] = {
-    # (callahan_label, unit)
-    "delinq_rate_total":              ("Total Delinquency Ratio",       "%"),
-    "chargeoff_rate_total_annualized":("Net Charge-Off Ratio",          "%"),
-    "alll_coverage":                  ("Allowance Coverage Ratio",       "x"),
-    "alll_to_loans":                  ("ALLL to Total Loans",            "%"),
-    "net_worth_ratio":                ("Net Worth Ratio",                "%"),
-    "roa_annualized":                 ("Return on Assets",               "%"),
-    "efficiency_ratio":               ("Efficiency Ratio",               "%"),
-    "acct_010":                       ("Total Assets",                   "$"),
-    "acct_025B":                      ("Total Loans and Leases",         "$"),
-    "acct_018":                       ("Total Shares and Deposits",      "$"),
-    "acct_083":                       ("Members",                        "count"),
+    # (callahan_label, unit) — order controls display order in comparison table
+    # Asset Quality
+    "delinq_rate_total":               ("Total Delinquency Ratio",        "%"),
+    "delinq_rate_90plus":              ("90+ Day Delinquency",            "%"),
+    "chargeoff_rate_total_annualized": ("Net Charge-Off Ratio",           "%"),
+    "alll_coverage":                   ("Allowance Coverage Ratio",       "x"),
+    "alll_to_loans":                   ("ALLL to Total Loans",            "%"),
+    "non_accrual_rate":                ("Non-Accrual Rate",               "%"),
+    "tdr_to_loans":                    ("TDR / Modifications",            "%"),
+    # Capital
+    "net_worth_ratio":                 ("Net Worth Ratio",                "%"),
+    "rbc_ratio":                       ("Risk-Based Capital Ratio",       "%"),
+    # Earnings
+    "roa_annualized":                  ("Return on Assets",               "%"),
+    "nim":                             ("Net Interest Margin",            "%"),
+    "efficiency_ratio":                ("Efficiency Ratio",               "%"),
+    # Lending / Balance Sheet
+    "loan_to_share":                   ("Loan-to-Share Ratio",            "%"),
+    "acct_010":                        ("Total Assets",                   "$"),
+    "acct_025B":                       ("Total Loans and Leases",         "$"),
+    "acct_018":                        ("Total Shares and Deposits",      "$"),
+    "acct_083":                        ("Members",                        "count"),
 }
 
 DISPLAY_METRICS = list(METRIC_LABELS.keys())
