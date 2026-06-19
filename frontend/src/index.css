@@ -404,6 +404,22 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .metric-tab:hover:not(.active)  { background: var(--bg-gray); color: var(--text); border-color: #BDBDBD; }
 .metric-tab.active              { background: #1A237E; color: #fff; border-color: #1A237E; font-weight: 600; }
 .tab-stars { font-size: 9px; letter-spacing: -1px; opacity: .7; }
+.metric-tab-divider {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 6px 0 12px;
+  border-left: 1px solid var(--border);
+  margin-left: 4px;
+}
+.metric-tab-divider:first-child { border-left: none; padding-left: 0; margin-left: 0; }
 
 /* ── Signal separator ── */
 .signal-geo-controls {
