@@ -24,17 +24,32 @@ from processing.peer_engine import ASSET_BANDS, PeerGroupType
 logger = logging.getLogger(__name__)
 
 METRICS = [
-    "acct_010",          # total assets (raw)
+    # Raw account codes (balance sheet / member)
+    "acct_010",          # total assets
     "acct_025B",         # total loans
     "acct_018",          # total shares/deposits
     "acct_083",          # member count
+    # Overall credit quality
     "delinq_rate_total",
+    "delinq_rate_90plus",
     "chargeoff_rate_total_annualized",
+    "non_accrual_rate",
+    "tdr_to_loans",
     "alll_coverage",
     "alll_to_loans",
+    # Per-product delinquency rates
+    "delinq_rate_cc",
+    "delinq_rate_auto",
+    "delinq_rate_1st_mortgage",
+    "delinq_rate_nonfarm_nonre",
+    "delinq_rate_commercial_re",
+    # Capital & earnings
     "net_worth_ratio",
+    "rbc_ratio",
     "roa_annualized",
+    "nim",
     "efficiency_ratio",
+    "loan_to_share",
 ]
 
 PEER_GROUP_TYPES = [
@@ -167,8 +182,25 @@ def run(period: str, db_url: str | None = None) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--period", required=True, help="e.g. 2026Q1")
+    parser.add_argument("--period", help="Single period e.g. 2026Q1")
+    parser.add_argument("--all-periods", action="store_true",
+                        help="Recompute distributions for every period in the database")
     parser.add_argument("--db-url", default=None)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    run(args.period, args.db_url)
+
+    if args.all_periods:
+        from sqlalchemy import text as sa_text
+        engine = get_engine(args.db_url)
+        with engine.connect() as conn:
+            result = conn.execute(sa_text(
+                "SELECT DISTINCT period FROM institutions_quarterly ORDER BY period"
+            ))
+            periods = [r[0] for r in result]
+        logger.info("Running distributions for %d periods: %s", len(periods), periods)
+        for p in periods:
+            run(p, args.db_url)
+    elif args.period:
+        run(args.period, args.db_url)
+    else:
+        parser.error("Provide --period YYYYQN or --all-periods")
