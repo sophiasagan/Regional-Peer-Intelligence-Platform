@@ -43,8 +43,9 @@ const ADVERSE_METRICS = new Set([
   'delinq_rate_total', 'delinq_rate_90plus', 'chargeoff_rate_total_annualized',
   'oreo_to_assets', 'non_accrual_rate', 'tdr_to_loans',
   'operating_expense_ratio', 'credit_loss_expense_to_loans', 'borrowings_to_assets',
-  'efficiency_ratio', 'delinq_rate_credit_card', 'delinq_rate_auto_total',
-  'delinq_rate_first_mortgage', 'delinq_rate_commercial', 'delinq_rate_commercial_re',
+  'efficiency_ratio',
+  'delinq_rate_cc', 'delinq_rate_auto', 'delinq_rate_1st_mortgage',
+  'delinq_rate_nonfarm_nonre', 'delinq_rate_commercial_re',
 ]);
 
 const UNIT_LABELS = {

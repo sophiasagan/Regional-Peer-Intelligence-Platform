@@ -898,7 +898,7 @@ async def get_single_metric_trend(
         dist = compute_peer_distribution(metric_name, peer_charters, p, DB_URL, prior_period=prior_p)
         result_rows.append({
             "period": p,
-            "institution_value": float(inst_val) if inst_val is not None else None,
+            "institution_value": float(inst_val) if (inst_val is not None and not pd.isna(inst_val)) else None,
             "peer_p10": dist.get("p10"),
             "peer_p25": dist.get("p25"),
             "peer_p50": dist.get("p50"),
