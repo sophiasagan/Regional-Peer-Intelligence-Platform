@@ -116,6 +116,8 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_041G4": "acct_041G4",     # total delinquent member commercial non-RE loans
     "ACCT_041P3": "acct_041P3",     # total delinquent nonmember commercial RE loans
     "ACCT_041P4": "acct_041P4",     # total delinquent nonmember commercial non-RE loans
+    # TDR / loan modifications (FS220H) — Acct_1001F uppercased to ACCT_1001F by _read_schedule
+    "ACCT_1001F": "acct_1001F",     # total TDR / modifications outstanding
 }
 
 # Delinquency sub-mapping: raw CSV names that differ from ACCT_XXX convention.
@@ -154,6 +156,8 @@ _BIGINT_COLS = [
     # loan composition
     "acct_396", "acct_385", "acct_370", "acct_703A", "acct_386A",
     "acct_718A5", "acct_400P", "acct_618A",
+    # TDR / modifications
+    "acct_1001F",
     # per-product delinquency
     "acct_045B", "acct_752", "acct_753", "acct_754",
     "acct_041C1", "acct_041C2",
@@ -244,6 +248,7 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
         "FS220D.txt",  # shares schedule
         "FS220A.txt",  # loans schedule
         "FS220G.txt",  # additional data
+        "FS220H.txt",  # TDR / loan modifications (Acct_1001F total, Acct_1001D/E by type)
         "FS220I.txt",  # per-product delinquency totals (ACCT_041C1/C2/G1/G2/P1/P2) + charge-offs
         "FS220L.txt",  # commercial loan delinquency totals (ACCT_041G3/G4/P3/P4)
         "FS220N.txt",  # CECL allowance (ACCT_AS0048), credit loss expense (ACCT_IS0017)

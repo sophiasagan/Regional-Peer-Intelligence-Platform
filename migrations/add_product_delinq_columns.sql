@@ -26,4 +26,6 @@ ALTER TABLE institutions_quarterly
   ADD COLUMN IF NOT EXISTS "acct_041P1" BIGINT,  -- total delinquent nonmember business RE (FS220I)
   ADD COLUMN IF NOT EXISTS "acct_041P2" BIGINT,  -- total delinquent nonmember business non-RE (FS220I)
   ADD COLUMN IF NOT EXISTS "acct_041P3" BIGINT,  -- total delinquent nonmember commercial RE (FS220L)
-  ADD COLUMN IF NOT EXISTS "acct_041P4" BIGINT;  -- total delinquent nonmember commercial non-RE (FS220L)
+  ADD COLUMN IF NOT EXISTS "acct_041P4" BIGINT,  -- total delinquent nonmember commercial non-RE (FS220L)
+  -- TDR / loan modifications (FS220H)
+  ADD COLUMN IF NOT EXISTS "acct_1001F" BIGINT;  -- total TDR / modifications outstanding

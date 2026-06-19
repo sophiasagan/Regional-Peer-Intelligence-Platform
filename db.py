@@ -62,6 +62,8 @@ institutions_quarterly = Table(
     Column("acct_661A", BigInteger),    # net income
     # Capital
     Column("acct_RB0172", Float),       # risk-based capital ratio
+    # TDR / loan modifications (FS220H)
+    Column("acct_1001F", BigInteger),   # total TDR / modifications outstanding
     # Loan composition (from FS220A)
     Column("acct_396", BigInteger),     # credit card loans
     Column("acct_385", BigInteger),     # new vehicle loans
