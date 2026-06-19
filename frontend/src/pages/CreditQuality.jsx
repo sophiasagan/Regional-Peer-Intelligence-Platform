@@ -1,34 +1,32 @@
 /**
  * CreditQuality — primary credit quality dashboard.
  *
+ * Layout: sticky top bar → KPI row → Early Warning (if alerts) →
+ *   [Trend chart card] → [Delinquency by Product card] → [Peer Comparison card]
+ *
  * P76 exclusive features (always present, clearly labeled):
- *   EarlyWarningPanel  — "Know before your examiner does" — auto-expands on any alert
- *   SignalSeparator    — "Is this a you-problem or a market-problem?" — below every delinquency chart
- *   Regional peer toggle — always visible in peer group selector
- *   PeerBandChart      — the ONLY chart type for trend views; regional line = purple dashed
- *   LoanTypeBreakdownChart — "Delinquency by Product" (Callahan) — grouped bars
+ *   EarlyWarningPanel  — "Know before your examiner does"
+ *   SignalSeparator    — "Is this a you-problem or a market-problem?"
+ *   Regional peer toggle — always visible in top bar
+ *   PeerBandChart      — the ONLY chart type; regional line = purple dashed
  *
  * Callahan UX parity (NEVER violate):
- *   Exact Callahan metric names everywhere
- *   Top decile = green badge, Bottom decile = red badge
- *   Stars: 1 = <10th pctile, 5 = ≥90th pctile
- *   Period default: 3 years / 12 quarters
- *   Every chart has Excel/CSV download
+ *   Exact Callahan metric names · top decile = green · bottom = red
+ *   Stars 1–5 · Period default 3Y/12Q · Every chart has CSV download
  *   Always show peer group label on every chart
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import EarlyWarningPanel      from '../components/EarlyWarningPanel';
 import PeerBandChart          from '../components/PeerBandChart';
 import SignalSeparator        from '../components/SignalSeparator';
-import MetricLibrary          from '../components/MetricLibrary';
 import KpiCard                from '../components/KpiCard';
 import LoanTypeBreakdownChart from '../components/LoanTypeBreakdownChart';
 import PeerComparisonTable    from '../components/PeerComparisonTable';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
-// Metrics that require SignalSeparator below their trend chart
+// Metrics that get the SignalSeparator
 const SIGNAL_METRICS = new Set([
   'delinq_rate_total', 'delinq_rate_90plus', 'chargeoff_rate_total_annualized',
   'alll_coverage', 'alll_to_loans', 'non_accrual_rate', 'tdr_to_loans',
@@ -36,12 +34,24 @@ const SIGNAL_METRICS = new Set([
   'delinq_rate_first_mortgage', 'delinq_rate_commercial', 'delinq_rate_commercial_re',
 ]);
 
-// Top 4 KPI cards (exact Callahan labels)
+// KPI cards — exact Callahan labels
 const KPI_DEFS = [
   { metric: 'delinq_rate_total',               label: 'Total Delinquency Ratio',   unit: '%', adverse: true  },
   { metric: 'delinq_rate_90plus',              label: '90+ Day Delinquency',        unit: '%', adverse: true  },
   { metric: 'chargeoff_rate_total_annualized', label: 'Net Charge-Off Ratio',       unit: '%', adverse: true  },
   { metric: 'alll_coverage',                   label: 'ALLL Coverage Ratio',        unit: 'x', adverse: false },
+];
+
+// Metric tabs — horizontal strip above the trend chart
+const METRIC_TABS = [
+  { value: 'delinq_rate_total',               label: 'Total Delinquency' },
+  { value: 'delinq_rate_90plus',              label: '90+ Day Delinq' },
+  { value: 'chargeoff_rate_total_annualized', label: 'Net Charge-Off' },
+  { value: 'alll_coverage',                   label: 'ALLL Coverage' },
+  { value: 'alll_to_loans',                   label: 'ALLL to Loans' },
+  { value: 'net_worth_ratio',                 label: 'Net Worth Ratio' },
+  { value: 'roa_annualized',                  label: 'Return on Assets' },
+  { value: 'efficiency_ratio',                label: 'Efficiency Ratio' },
 ];
 
 const PERIOD_OPTIONS = [
@@ -102,7 +112,7 @@ function useAlerts(charterNumber, period, peerGroup, token) {
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 function TopBar({
-  institutionName, stateAbbrev, peerGroupLabel,
+  institutionName, stateAbbrev,
   peerGroup, onPeerGroupChange,
   periodLabel, onPeriodChange,
   onDownload,
@@ -110,20 +120,16 @@ function TopBar({
   return (
     <header className="cq-topbar">
       <div className="topbar-left">
-        <h1 className="page-title">Credit quality</h1>
-      </div>
-
-      <div className="topbar-center">
+        <h1 className="page-title">Credit Quality</h1>
         {institutionName && (
           <span className="inst-pill">
             {institutionName}{stateAbbrev ? ` (${stateAbbrev})` : ''}
           </span>
         )}
-        {peerGroupLabel && (
-          <span className="peer-pill">{peerGroupLabel}</span>
-        )}
+      </div>
 
-        {/* Regional / National toggle — always visible (P76 rule) */}
+      <div className="topbar-center">
+        <span className="topbar-label">Peer group</span>
         <div className="peer-toggle" role="group" aria-label="Peer group">
           <button
             className={`toggle-btn ${peerGroup === 'REGIONAL'   ? 'active' : ''}`}
@@ -147,6 +153,7 @@ function TopBar({
       </div>
 
       <div className="topbar-right">
+        <span className="topbar-label">Period</span>
         <div className="period-selector" role="group" aria-label="Time period">
           {PERIOD_OPTIONS.map(opt => (
             <button
@@ -191,39 +198,33 @@ function KpiRow({ metrics, comparison }) {
   );
 }
 
-function MetricSelector({ activeMetric, onSelect, comparison }) {
+function MetricTabs({ activeMetric, onSelect, comparison }) {
   const byName = Object.fromEntries(
     (comparison?.metrics ?? []).map(m => [m.metric_name, m])
   );
-  const options = [
-    { value: 'delinq_rate_total',               label: 'Total Delinquency Ratio' },
-    { value: 'delinq_rate_90plus',              label: '90+ Day Delinquency' },
-    { value: 'chargeoff_rate_total_annualized', label: 'Net Charge-Off Ratio' },
-    { value: 'alll_coverage',                   label: 'ALLL Coverage Ratio' },
-    { value: 'alll_to_loans',                   label: 'ALLL to Total Loans' },
-    { value: 'net_worth_ratio',                 label: 'Net Worth Ratio' },
-    { value: 'roa_annualized',                  label: 'Return on Assets' },
-    { value: 'efficiency_ratio',                label: 'Efficiency Ratio' },
-  ];
   return (
-    <div className="metric-selector-row">
-      <label htmlFor="metric-select" className="metric-select-label">Metric:</label>
-      <select
-        id="metric-select"
-        className="metric-select"
-        value={activeMetric}
-        onChange={e => onSelect(e.target.value)}
-      >
-        {options.map(o => {
-          const m = byName[o.value];
-          const stars = m?.stars != null ? ` (${'★'.repeat(m.stars)}${'☆'.repeat(5 - m.stars)})` : '';
-          return (
-            <option key={o.value} value={o.value}>
-              {o.label}{stars}
-            </option>
-          );
-        })}
-      </select>
+    <div className="metric-tabs" role="tablist" aria-label="Select metric">
+      {METRIC_TABS.map(tab => {
+        const m      = byName[tab.value];
+        const stars  = m?.stars;
+        const active = activeMetric === tab.value;
+        return (
+          <button
+            key={tab.value}
+            role="tab"
+            aria-selected={active}
+            className={`metric-tab${active ? ' active' : ''}`}
+            onClick={() => onSelect(tab.value)}
+          >
+            {tab.label}
+            {stars != null && !active && (
+              <span className="tab-stars" aria-hidden>
+                {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -236,24 +237,17 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
   const [nPeriods,       setNPeriods]      = useState(12);
   const [peerGroup,      setPeerGroup]     = useState('REGIONAL');
   const [activeMetric,   setActiveMetric]  = useState('delinq_rate_total');
-  const [customCharters, setCustomCharters] = useState(null);  // null = use default peer group
+  const [customCharters, setCustomCharters] = useState(null);
 
-  // Geography for SignalSeparator — defaults to institution's state
   const [geographyType, setGeographyType] = useState('state');
   const [geographyId,   setGeographyId]   = useState(null);
 
-  // Scroll-to ref for loan breakdown (used by MetricLibrary "Delinquency by Product")
-  const loanBreakdownRef = React.useRef(null);
+  const loanBreakdownRef = useRef(null);
 
-  const instInfo    = useInstitutionInfo(charterNumber, period, token);
-  const comparison  = usePeerComparison(charterNumber, period, peerGroup, token, customCharters);
-  const alerts      = useAlerts(charterNumber, period, peerGroup, token);
+  const instInfo   = useInstitutionInfo(charterNumber, period, token);
+  const comparison = usePeerComparison(charterNumber, period, peerGroup, token, customCharters);
+  const alerts     = useAlerts(charterNumber, period, peerGroup, token);
 
-  function handleCustomCharters(charters) {
-    setCustomCharters(charters);   // null resets to default peer group
-  }
-
-  // Set geography default from institution's state once loaded
   useEffect(() => {
     if (instInfo?.state_abbrev && !geographyId) {
       setGeographyId(instInfo.state_abbrev);
@@ -265,18 +259,6 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
     setNPeriods(n);
   }
 
-  function handleMetricSelect(name) {
-    setActiveMetric(name);
-  }
-
-  function handleSpecialView(special) {
-    if (special === 'loan_breakdown') {
-      loanBreakdownRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-    // FPR, CUPP, Trendwatch — future: navigate to those views
-  }
-
-  // Full dashboard CSV download (KPI metrics + peer comparison table)
   const handleDownload = useCallback(() => {
     if (!comparison?.metrics?.length) return;
     const lines = [
@@ -309,11 +291,10 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
   return (
     <div className="credit-quality-page">
 
-      {/* ── Top bar ── */}
+      {/* ── Sticky top bar ── */}
       <TopBar
         institutionName={instInfo?.institution_name}
         stateAbbrev={instInfo?.state_abbrev}
-        peerGroupLabel={peerLabel}
         peerGroup={peerGroup}
         onPeerGroupChange={setPeerGroup}
         periodLabel={periodLabel}
@@ -321,38 +302,37 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
         onDownload={handleDownload}
       />
 
-      {/* ── KPI row — 4 cards matching Callahan top-of-page layout ── */}
+      {/* ── KPI row ── */}
       <KpiRow metrics={KPI_DEFS} comparison={comparison} />
 
-      {/* ── Early warning panel — P76 exclusive — auto-expands on any alert ── */}
-      <EarlyWarningPanel
-        charterNumber={charterNumber}
-        period={period}
-        peerGroup={peerGroup}
-        token={token}
-        alerts={alerts}
-      />
-
-      {/* ── Two-column body: MetricLibrary | Main content ── */}
-      <div className="dashboard-layout">
-
-        <MetricLibrary
-          activeMetric={activeMetric}
-          onMetricSelect={handleMetricSelect}
-          onSpecialView={handleSpecialView}
+      {/* ── Early warning — P76 exclusive ── */}
+      <div className="cq-alerts-area">
+        <EarlyWarningPanel
+          charterNumber={charterNumber}
+          period={period}
+          peerGroup={peerGroup}
+          token={token}
+          alerts={alerts}
         />
+      </div>
 
-        <main className="dashboard-main">
+      <div className="cq-body">
 
-          {/* ── Main chart ── */}
-          <section className="chart-section">
-            <MetricSelector
-              activeMetric={activeMetric}
-              onSelect={handleMetricSelect}
-              comparison={comparison}
-            />
+        {/* ── Trend chart card ── */}
+        <div className="cq-card">
+          <div className="cq-card-header">
+            <span className="cq-card-title">Trend Analysis</span>
+            <span className="cq-card-meta">Updates with: peer group · time period</span>
+          </div>
 
-            {/* PeerBandChart is the ONLY chart type for trend views (P76 rule) */}
+          {/* Metric tabs — click a tab to switch the chart below */}
+          <MetricTabs
+            activeMetric={activeMetric}
+            onSelect={setActiveMetric}
+            comparison={comparison}
+          />
+
+          <div className="cq-card-body">
             <PeerBandChart
               metric={activeMetric}
               charterNumber={charterNumber}
@@ -362,10 +342,9 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
               token={token}
             />
 
-            {/* Signal separator — P76 exclusive — below every delinquency/charge-off chart */}
+            {/* Signal separator — below every delinquency/charge-off chart */}
             {showSignal && (
               <>
-                {/* Geography scope controls for signal separation */}
                 <div className="signal-geo-controls">
                   <select
                     value={geographyType}
@@ -400,32 +379,38 @@ export default function CreditQuality({ charterNumber = 68708, token }) {
                 />
               </>
             )}
-          </section>
+          </div>
+        </div>
 
-          {/* ── Delinquency by Product — second chart (Callahan) ── */}
-          <section className="loan-breakdown-section" ref={loanBreakdownRef}>
+        {/* ── Delinquency by Product ── */}
+        <div className="cq-card" ref={loanBreakdownRef}>
+          <div className="cq-card-header">
+            <span className="cq-card-title">Delinquency by Product</span>
+            <span className="cq-card-meta">Callahan · updates with peer group</span>
+          </div>
+          <div className="cq-card-body">
             <LoanTypeBreakdownChart
               charterNumber={charterNumber}
               period={period}
               peerGroup={peerGroup}
               token={token}
             />
-          </section>
+          </div>
+        </div>
 
-          {/* ── Peer comparison table — lower section ── */}
-          <section className="peer-table-section">
-            <PeerComparisonTable
-              metrics={comparison?.metrics ?? []}
-              charterNumber={charterNumber}
-              period={period}
-              peerGroup={peerGroup}
-              peerGroupLabel={peerLabel}
-              peerCount={comparison?.peer_count}
-              onCustomCharters={handleCustomCharters}
-            />
-          </section>
+        {/* ── Peer comparison table ── */}
+        <div className="cq-card">
+          <PeerComparisonTable
+            metrics={comparison?.metrics ?? []}
+            charterNumber={charterNumber}
+            period={period}
+            peerGroup={peerGroup}
+            peerGroupLabel={peerLabel}
+            peerCount={comparison?.peer_count}
+            onCustomCharters={setCustomCharters}
+          />
+        </div>
 
-        </main>
       </div>
     </div>
   );
