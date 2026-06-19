@@ -71,6 +71,12 @@ const METRIC_TABS = [
   { value: 'acct_010',                        label: 'Total Assets'        },
   { value: 'acct_018',                        label: 'Total Shares'        },
   { value: 'acct_083',                        label: 'Members'             },
+  // ── Growth (YoY — prior-year same quarter) ─────────────────────────────────
+  { divider: true, label: 'Growth (YoY)' },
+  { value: 'loan_growth_rate',                label: 'Loan Growth'         },
+  { value: 'share_growth_rate',               label: 'Share Growth'        },
+  { value: 'asset_growth_rate',               label: 'Asset Growth'        },
+  { value: 'member_growth_rate',              label: 'Member Growth'       },
 ];
 
 const PERIOD_OPTIONS = [

@@ -25,10 +25,13 @@ from sqlalchemy import select, text
 from db import get_engine, institutions_quarterly
 from processing.delinquency_engine import (
     ADVERSE_METRICS,
+    GROWTH_METRICS,
     assign_stars,
+    compute_growth,
     compute_peer_distribution,
     compute_ratios,
     rank_institution,
+    _prior_year_period,
 )
 from processing.early_warning_engine import _trailing_periods
 from processing.peer_engine import PeerGroupType, build_peer_group, peer_group_label
@@ -79,6 +82,11 @@ METRIC_LABELS: dict[str, tuple[str, str]] = {
     "acct_025B":                       ("Total Loans and Leases",         "$"),
     "acct_018":                        ("Total Shares and Deposits",      "$"),
     "acct_083":                        ("Members",                        "count"),
+    # Growth (YoY — computed from prior-year same quarter)
+    "loan_growth_rate":                ("Loan Growth Rate",               "%"),
+    "share_growth_rate":               ("Share Growth Rate",              "%"),
+    "asset_growth_rate":               ("Asset Growth Rate",              "%"),
+    "member_growth_rate":              ("Member Growth Rate",             "%"),
 }
 
 DISPLAY_METRICS = list(METRIC_LABELS.keys())
@@ -305,6 +313,23 @@ async def get_peer_comparison(
         raise HTTPException(status_code=404, detail=f"Charter {charter_number} not found for period {period}")
 
     inst_df = compute_ratios(pd.DataFrame([dict(r) for r in rows]))
+
+    # Load prior-year period for YoY growth rates
+    prior_period = _prior_year_period(period)
+    if prior_period:
+        with engine.connect() as conn:
+            prior_result = conn.execute(
+                select(institutions_quarterly).where(
+                    institutions_quarterly.c.charter_number == charter_number,
+                    institutions_quarterly.c.period == prior_period,
+                )
+            )
+            prior_rows = prior_result.mappings().all()
+        prior_df = pd.DataFrame([dict(r) for r in prior_rows]) if prior_rows else None
+    else:
+        prior_df = None
+
+    inst_df  = compute_growth(inst_df, prior_df)
     inst_row = inst_df.iloc[0]
     institution_name = str(inst_row.get("institution_name", f"Charter {charter_number}"))
 
@@ -321,7 +346,7 @@ async def get_peer_comparison(
     metric_rows = []
     for metric, (callahan_label, unit) in METRIC_LABELS.items():
         inst_val = inst_row.get(metric)
-        dist = compute_peer_distribution(metric, peer_charters, period, DB_URL)
+        dist = compute_peer_distribution(metric, peer_charters, period, DB_URL, prior_period=prior_period)
 
         if dist["n"] == 0 or inst_val is None or __import__("math").isnan(float(inst_val if inst_val is not None else float("nan"))):
             metric_rows.append(MetricRow(
@@ -833,7 +858,11 @@ async def get_single_metric_trend(
     engine = get_engine(DB_URL)
     result_rows = []
 
+    is_growth = metric_name in GROWTH_METRICS
+
     for p in periods:
+        prior_p = _prior_year_period(p)
+
         with engine.connect() as conn:
             inst_result = conn.execute(
                 select(institutions_quarterly).where(
@@ -847,9 +876,20 @@ async def get_single_metric_trend(
             inst_val = None
         else:
             inst_df = compute_ratios(pd.DataFrame([dict(r) for r in inst_rows]))
+            if is_growth and prior_p:
+                with engine.connect() as conn:
+                    prior_result = conn.execute(
+                        select(institutions_quarterly).where(
+                            institutions_quarterly.c.charter_number == charter_number,
+                            institutions_quarterly.c.period == prior_p,
+                        )
+                    )
+                    prior_rows = prior_result.mappings().all()
+                prior_df = pd.DataFrame([dict(r) for r in prior_rows]) if prior_rows else None
+                inst_df = compute_growth(inst_df, prior_df)
             inst_val = inst_df[metric_name].iloc[0] if metric_name in inst_df.columns else None
 
-        dist = compute_peer_distribution(metric_name, peer_charters, p, DB_URL)
+        dist = compute_peer_distribution(metric_name, peer_charters, p, DB_URL, prior_period=prior_p)
         result_rows.append({
             "period": p,
             "institution_value": float(inst_val) if inst_val is not None else None,

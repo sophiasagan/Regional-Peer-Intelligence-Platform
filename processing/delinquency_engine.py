@@ -25,6 +25,7 @@ from db import get_engine, institutions_quarterly, peer_distributions
 logger = logging.getLogger(__name__)
 
 # Metrics where high value = worse outcome = lower stars
+# growth_rate_* and nim/loan_to_share/rbc_ratio are intentionally excluded (higher = better)
 ADVERSE_METRICS: frozenset[str] = frozenset({
     "delinq_rate_total",
     "delinq_rate_90plus",
@@ -138,9 +139,18 @@ def compute_peer_distribution(
     peer_charters: list[int],
     period: str,
     db_url: str | None = None,
+    prior_period: str | None = None,
 ) -> dict:
-    """Return percentile distribution for a metric across the peer group."""
-    values = _load_peer_values(metric, peer_charters, period, db_url)
+    """Return percentile distribution for a metric across the peer group.
+
+    For growth metrics, prior_period must be provided (defaults to same-Q prior year).
+    """
+    if metric in GROWTH_METRICS:
+        pp = prior_period or _prior_year_period(period)
+        values = _load_peer_growth_values(metric, peer_charters, period, pp, db_url) if pp else pd.Series(dtype=float)
+    else:
+        values = _load_peer_values(metric, peer_charters, period, db_url)
+
     if values.empty:
         return {"n": 0, "p10": None, "p25": None, "p50": None, "p75": None, "p90": None}
 
@@ -152,6 +162,81 @@ def compute_peer_distribution(
         "p75": float(values.quantile(0.75)),
         "p90": float(values.quantile(0.90)),
     }
+
+
+# YoY growth metrics — (account_code, callahan_label)
+GROWTH_METRICS: dict[str, tuple[str, str]] = {
+    "loan_growth_rate":   ("acct_025B", "Loan Growth Rate"),
+    "share_growth_rate":  ("acct_018",  "Share Growth Rate"),
+    "asset_growth_rate":  ("acct_010",  "Asset Growth Rate"),
+    "member_growth_rate": ("acct_083",  "Member Growth Rate"),
+}
+
+
+def _prior_year_period(period: str) -> str | None:
+    """Return the same quarter one year prior (e.g. 2026Q1 → 2025Q1)."""
+    try:
+        year, q = int(period[:4]), int(period[5])
+        return f"{year - 1}Q{q}"
+    except Exception:
+        return None
+
+
+def compute_growth(df_curr: pd.DataFrame, df_prior: pd.DataFrame | None) -> pd.DataFrame:
+    """Add YoY growth rate columns by comparing current vs. prior-year same quarter.
+
+    df_curr and df_prior must each contain at most one row per institution
+    (i.e. already filtered to a single charter/period).
+    """
+    df = df_curr.copy()
+    if df_prior is None or df_prior.empty:
+        for metric in GROWTH_METRICS:
+            df[metric] = np.nan
+        return df
+
+    for metric, (acct, _) in GROWTH_METRICS.items():
+        curr  = pd.to_numeric(df_curr.get(acct,  pd.Series(dtype=float)), errors="coerce")
+        prior = pd.to_numeric(df_prior.get(acct, pd.Series(dtype=float)), errors="coerce")
+        curr_val  = curr.iloc[0]  if len(curr)  > 0 else np.nan
+        prior_val = prior.iloc[0] if len(prior) > 0 else np.nan
+        if pd.notna(curr_val) and pd.notna(prior_val) and prior_val != 0:
+            df[metric] = float(curr_val - prior_val) / abs(float(prior_val))
+        else:
+            df[metric] = np.nan
+    return df
+
+
+def _load_peer_growth_values(
+    metric: str,
+    peer_charters: list[int],
+    period: str,
+    prior_period: str,
+    db_url: str | None,
+) -> pd.Series:
+    """Compute YoY growth rate for each peer institution."""
+    acct = GROWTH_METRICS[metric][0]
+    engine = get_engine(db_url)
+    with engine.connect() as conn:
+        result = conn.execute(
+            select(
+                institutions_quarterly.c.charter_number,
+                institutions_quarterly.c.period,
+                institutions_quarterly.c[acct],
+            ).where(
+                institutions_quarterly.c.period.in_([period, prior_period]),
+                institutions_quarterly.c.charter_number.in_(peer_charters),
+            )
+        )
+        df = pd.DataFrame(result.mappings().all())
+
+    if df.empty:
+        return pd.Series(dtype=float)
+
+    df[acct] = pd.to_numeric(df[acct], errors="coerce")
+    curr  = df[df["period"] == period].set_index("charter_number")[acct]
+    prior = df[df["period"] == prior_period].set_index("charter_number")[acct]
+    growth = (curr - prior) / prior.abs().replace(0, np.nan)
+    return growth.dropna()
 
 
 def rank_institution(value: float, distribution: dict, metric: str) -> float:

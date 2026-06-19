@@ -310,6 +310,10 @@ def parse_csv(csv_path: str) -> pd.DataFrame:
     unmapped = {k for k in combined_map if k not in df.columns}
     logger.info("Field map: %d/%d source fields matched. Missing: %s",
                 len(mapped), len(combined_map), sorted(unmapped))
+    # Identify unmapped columns BEFORE rename (these are raw NCUA codes we want to keep)
+    standard_targets = set(combined_map.keys())
+    extra_source_cols = [c for c in df.columns if c not in standard_targets]
+
     df = df.rename(columns={k: v for k, v in combined_map.items() if k in df.columns})
     # Drop duplicate columns that arise when multiple source keys map to the same target
     df = df.loc[:, ~df.columns.duplicated(keep="last")]
@@ -318,8 +322,26 @@ def parse_csv(csv_path: str) -> pd.DataFrame:
     if "period" in df.columns:
         df["period"] = _period_from_cycle_date(df["period"])
 
-    # Drop columns we don't need
-    keep = set(combined_map.values()) | {"charter_number", "institution_name", "period", "state_code", "county_name"}
+    # Collect ALL unmapped NCUA account codes into all_accounts JSONB.
+    # This preserves per-product delinquency codes (e.g. ACCT_DL0151B) and other
+    # schedule fields so they can be queried and promoted to named columns later.
+    # Only store columns that look like NCUA account codes (numeric or DL/IS/AS prefix).
+    acct_cols = [
+        c for c in extra_source_cols
+        if c in df.columns and (
+            c.startswith("ACCT_") or c.startswith("DL") or c.startswith("IS")
+            or c.startswith("AS") or c.startswith("RB") or c[:4].isdigit()
+        )
+    ]
+    if acct_cols:
+        def _row_to_json(row):
+            return {k: (None if pd.isna(v) else v) for k, v in row.items()}
+        df["all_accounts"] = df[acct_cols].apply(_row_to_json, axis=1)
+        logger.info("Stored %d unmapped NCUA codes in all_accounts JSONB", len(acct_cols))
+    else:
+        df["all_accounts"] = [{}] * len(df)
+
+    keep = set(combined_map.values()) | {"charter_number", "institution_name", "period", "state_code", "county_name", "all_accounts"}
     df = df[[c for c in df.columns if c in keep]].copy()
     logger.info("Kept columns after filter: %s", sorted(df.columns.tolist()))
 
