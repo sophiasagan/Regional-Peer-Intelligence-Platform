@@ -55,46 +55,38 @@ with engine.connect() as conn:
     """))
     existing = {r[0] for r in result}
 
-found = sorted(c for c in NEW_COLS if c in existing)
-missing = sorted(c for c in NEW_COLS if c.lower() not in {e.lower() for e in existing})
+existing_lower = {e.lower() for e in existing}
+KEY_COLS = ['acct_703A','acct_396','acct_385','acct_370','acct_718A5','acct_400P',
+            'acct_045B','acct_752','acct_753','acct_754',
+            'acct_041C1','acct_041C2','acct_041G1','acct_041G2','acct_041G3',
+            'acct_041P1','acct_041P2','acct_041P3','acct_041P4','acct_1001F']
+found    = [c for c in KEY_COLS if c.lower() in existing_lower]
+missing  = [c for c in KEY_COLS if c.lower() not in existing_lower]
 
-print(f"Found ({len(found)}): {found}")
-print(f"Missing: {[c for c in ['acct_703A','acct_396','acct_385','acct_370','acct_718A5','acct_400P','acct_045B','acct_752','acct_753','acct_754','acct_041C1','acct_041C2','acct_041G1','acct_041G2','acct_041G3','acct_041P1','acct_1001F'] if c not in existing and c.lower() not in {e.lower() for e in existing}]}")
+print(f"Found  ({len(found)}): {found}")
+print(f"Missing({len(missing)}): {missing}")
 
-if not found:
-    print("\n⚠️  MIGRATION HAS NOT BEEN RUN — run migrations/add_product_delinq_columns.sql first")
-    sys.exit(1)
+if missing:
+    print("\n⚠️  MIGRATION NOT FULLY RUN — execute migrations/add_product_delinq_columns.sql")
+    print("    Then re-ingest to populate the new columns.")
+    if len(missing) == len(KEY_COLS):
+        sys.exit(1)   # nothing to show — stop early
 
 # ── 2. Dort Financial raw values ─────────────────────────────────────────────
 print("\n" + "=" * 60)
 print("2. DORT FINANCIAL RAW VALUES (last 4 quarters)")
 print("=" * 60)
 
-# Figure out the actual column names (case may vary)
-col_map = {c.lower(): c for c in existing}
-def col(name): return col_map.get(name.lower(), name)
+# Use SQLAlchemy ORM select — it handles mixed-case column quoting automatically
+from db import get_engine as _get_engine2, institutions_quarterly as iq
+from sqlalchemy import select as sa_select2
 
-with engine.connect() as conn:
-    result = conn.execute(text(f"""
-        SELECT
-            period,
-            acct_025B,
-            acct_041B,
-            "{col('acct_703A')}",
-            acct_752, acct_753, acct_754,
-            acct_396,
-            "{col('acct_045B')}",
-            "{col('acct_041C1')}",
-            "{col('acct_041C2')}",
-            "{col('acct_718A5')}",
-            "{col('acct_400P')}",
-            "{col('acct_041G1')}",
-            "{col('acct_041G2')}"
-        FROM institutions_quarterly
-        WHERE charter_number = {DORT_CHARTER}
-        ORDER BY period DESC
-        LIMIT 4
-    """))
+eng_orm = _get_engine2(db_url)
+with eng_orm.connect() as conn:
+    result = conn.execute(
+        sa_select2(iq).where(iq.c.charter_number == DORT_CHARTER)
+        .order_by(iq.c.period.desc()).limit(4)
+    )
     rows = result.mappings().all()
 
 if not rows:
@@ -102,41 +94,42 @@ if not rows:
 else:
     for row in rows:
         d = dict(row)
-        period = d.get("period")
-        loans = d.get("acct_025B") or 0
-        mortgage = d.get(col("acct_703A")) or 0
-        delinq_mortgage = (d.get("acct_752") or 0) + (d.get("acct_753") or 0) + (d.get("acct_754") or 0)
-        auto_port = (d.get("acct_396") or 0)  # wrong field for auto but shows pattern
-        delinq_cc = d.get(col("acct_045B")) or 0
-        new_veh_delinq = d.get(col("acct_041C1")) or 0
-        used_veh_delinq = d.get(col("acct_041C2")) or 0
-        comm_re = d.get(col("acct_718A5")) or 0
-        nonfarm = d.get(col("acct_400P")) or 0
-        comm_re_delinq = (d.get(col("acct_041G1")) or 0) + (d.get(col("acct_041G2")) or 0)
+        period      = d.get("period")
+        loans       = d.get("acct_025B") or 0
+        mortgage    = d.get("acct_703A") or 0
+        d_mort      = (d.get("acct_752") or 0) + (d.get("acct_753") or 0) + (d.get("acct_754") or 0)
+        cc_port     = d.get("acct_396") or 0
+        d_cc        = d.get("acct_045B") or 0
+        d_newveh    = d.get("acct_041C1") or 0
+        d_usedveh   = d.get("acct_041C2") or 0
+        comm_re     = d.get("acct_718A5") or 0
+        nonfarm     = d.get("acct_400P") or 0
+        d_comm_re   = (d.get("acct_041G1") or 0) + (d.get("acct_041G3") or 0)
+        d_nonfarm   = (d.get("acct_041G2") or 0) + (d.get("acct_041G4") or 0)
 
-        print(f"\n{period}:")
-        print(f"  Total loans: ${loans:,.0f}")
-        print(f"  1st Mortgage loans (703A): ${mortgage:,.0f}  |  delinq (752+753+754): ${delinq_mortgage:,.0f}  => {delinq_mortgage/mortgage*100:.3f}%" if mortgage else f"  1st Mortgage loans (703A): NULL/0 — denominator is ZERO, ratio will be NaN")
-        print(f"  CC loans (396): ${d.get('acct_396') or 0:,.0f}  |  CC delinq (045B): ${delinq_cc:,.0f}")
-        print(f"  New veh delinq (041C1): ${new_veh_delinq:,.0f}  |  Used veh delinq (041C2): ${used_veh_delinq:,.0f}")
-        print(f"  Comm RE loans (718A5): ${comm_re:,.0f}  |  Nonfarm loans (400P): ${nonfarm:,.0f}")
+        print(f"\n{period}:  total loans=${loans:,.0f}")
+        if mortgage:
+            print(f"  1st Mortgage (703A): ${mortgage:,.0f}  delinq(752+753+754)=${d_mort:,.0f}  => {d_mort/mortgage*100:.4f}%")
+        else:
+            print(f"  1st Mortgage (703A): NULL/0  ← denominator zero, ratio=NaN")
+        print(f"  CC loans (396): ${cc_port:,.0f}  delinq(045B)=${d_cc:,.0f}")
+        print(f"  New veh delinq(041C1): ${d_newveh:,.0f}  Used veh delinq(041C2): ${d_usedveh:,.0f}")
+        if comm_re:
+            print(f"  Comm RE (718A5): ${comm_re:,.0f}  delinq(G1+G3)=${d_comm_re:,.0f}  => {d_comm_re/comm_re*100:.4f}%")
+        else:
+            print(f"  Comm RE (718A5): NULL/0  ← denominator zero, ratio=NaN")
+        if nonfarm:
+            print(f"  Non-farm (400P): ${nonfarm:,.0f}  delinq(G2+G4)=${d_nonfarm:,.0f}  => {d_nonfarm/nonfarm*100:.4f}%")
+        else:
+            print(f"  Non-farm (400P): NULL/0  ← denominator zero, ratio=NaN")
 
 # ── 3. Computed ratio check ──────────────────────────────────────────────────
 print("\n" + "=" * 60)
 print("3. COMPUTED RATIOS FOR DORT FINANCIAL")
 print("=" * 60)
-from db import get_engine as _get_engine, institutions_quarterly
-from sqlalchemy import select as sa_select
 from processing.delinquency_engine import compute_ratios
 
-eng2 = _get_engine(db_url)
-with eng2.connect() as conn:
-    result = conn.execute(
-        sa_select(institutions_quarterly).where(
-            institutions_quarterly.c.charter_number == DORT_CHARTER
-        ).order_by(institutions_quarterly.c.period.desc()).limit(4)
-    )
-    df = pd.DataFrame(result.mappings().all())
+df = pd.DataFrame([dict(r) for r in rows])
 
 if df.empty:
     print("No data for Dort Financial")
