@@ -90,6 +90,32 @@ NCUA_FIELD_MAP: dict[str, str] = {
     # capital
     "ACCT_RB0172": "acct_RB0172",
     "RB0172": "acct_RB0172",        # bare code in 2024+ format
+    # loan composition (FS220A)
+    "ACCT_396": "acct_396",
+    "ACCT_385": "acct_385",
+    "ACCT_370": "acct_370",
+    "ACCT_703A": "acct_703A",
+    "ACCT_386A": "acct_386A",
+    "ACCT_718A5": "acct_718A5",
+    "ACCT_400P": "acct_400P",
+    "ACCT_618A": "acct_618A",
+    # per-product delinquency totals (60+ day) — FS220B
+    "ACCT_045B": "acct_045B",       # total delinquent credit card loans
+    "ACCT_752": "acct_752",         # fixed rate 1st mortgage 60-179 day
+    "ACCT_753": "acct_753",         # fixed rate 1st mortgage 180-359 day
+    "ACCT_754": "acct_754",         # fixed rate 1st mortgage 360+ day
+    # per-product delinquency totals — FS220I
+    "ACCT_041C1": "acct_041C1",     # total delinquent new vehicle loans
+    "ACCT_041C2": "acct_041C2",     # total delinquent used vehicle loans
+    "ACCT_041G1": "acct_041G1",     # total delinquent member business RE loans
+    "ACCT_041G2": "acct_041G2",     # total delinquent member business non-RE loans
+    "ACCT_041P1": "acct_041P1",     # total delinquent nonmember business RE loans
+    "ACCT_041P2": "acct_041P2",     # total delinquent nonmember business non-RE loans
+    # per-product delinquency totals — FS220L
+    "ACCT_041G3": "acct_041G3",     # total delinquent member commercial RE loans
+    "ACCT_041G4": "acct_041G4",     # total delinquent member commercial non-RE loans
+    "ACCT_041P3": "acct_041P3",     # total delinquent nonmember commercial RE loans
+    "ACCT_041P4": "acct_041P4",     # total delinquent nonmember commercial non-RE loans
 }
 
 # Delinquency sub-mapping: raw CSV names that differ from ACCT_XXX convention.
@@ -125,6 +151,14 @@ _BIGINT_COLS = [
     "acct_AS0048", "acct_719",
     "acct_115", "acct_IS0010", "acct_IS0017", "acct_117", "acct_671", "acct_661A",
     "acct_083",
+    # loan composition
+    "acct_396", "acct_385", "acct_370", "acct_703A", "acct_386A",
+    "acct_718A5", "acct_400P", "acct_618A",
+    # per-product delinquency
+    "acct_045B", "acct_752", "acct_753", "acct_754",
+    "acct_041C1", "acct_041C2",
+    "acct_041G1", "acct_041G2", "acct_041G3", "acct_041G4",
+    "acct_041P1", "acct_041P2", "acct_041P3", "acct_041P4",
 ]
 _FLOAT_COLS = ["acct_998", "acct_RB0172"]
 
@@ -210,7 +244,8 @@ def _extract_main_csv(zip_path: Path, dest: Path) -> str:
         "FS220D.txt",  # shares schedule
         "FS220A.txt",  # loans schedule
         "FS220G.txt",  # additional data
-        "FS220I.txt",  # charge-off details: Acct_550C1, Acct_550C2 (normalized to uppercase)
+        "FS220I.txt",  # per-product delinquency totals (ACCT_041C1/C2/G1/G2/P1/P2) + charge-offs
+        "FS220L.txt",  # commercial loan delinquency totals (ACCT_041G3/G4/P3/P4)
         "FS220N.txt",  # CECL allowance (ACCT_AS0048), credit loss expense (ACCT_IS0017)
         "FS220P.txt",  # delinquency buckets (ACCT_DL0141/145/146), NIM (ACCT_IS0010)
         "FS220R.txt",  # risk-based capital ratio (ACCT_RB0172)

@@ -69,6 +69,12 @@ METRIC_LABELS: dict[str, tuple[str, str]] = {
     "alll_to_loans":                   ("ALLL to Total Loans",            "%"),
     "non_accrual_rate":                ("Non-Accrual Rate",               "%"),
     "tdr_to_loans":                    ("TDR / Modifications",            "%"),
+    # Delinquency by Product
+    "delinq_rate_cc":                  ("Credit Card Delinquency",        "%"),
+    "delinq_rate_auto":                ("Auto Delinquency",               "%"),
+    "delinq_rate_1st_mortgage":        ("1st Mortgage Delinquency",       "%"),
+    "delinq_rate_nonfarm_nonre":       ("Non-Farm Non-RE Delinquency",    "%"),
+    "delinq_rate_commercial_re":       ("Commercial RE Delinquency",      "%"),
     # Capital
     "net_worth_ratio":                 ("Net Worth Ratio",                "%"),
     "rbc_ratio":                       ("Risk-Based Capital Ratio",       "%"),

@@ -42,9 +42,6 @@ const KPI_DEFS = [
   { metric: 'alll_coverage',                   label: 'ALLL Coverage Ratio',        unit: 'x', adverse: false },
 ];
 
-// Metric tabs — grouped by category; only metrics with computed formulas are shown.
-// Per-product delinquency, growth rates, and market share tabs are omitted until
-// the corresponding NCUA fields and multi-period pipeline are available.
 const METRIC_TABS = [
   // ── Asset Quality ──────────────────────────────────────────────────────────
   { divider: true, label: 'Asset Quality' },
@@ -55,6 +52,13 @@ const METRIC_TABS = [
   { value: 'alll_to_loans',                   label: 'ALLL to Loans'       },
   { value: 'non_accrual_rate',                label: 'Non-Accrual Rate'    },
   { value: 'tdr_to_loans',                    label: 'TDR / Modifications' },
+  // ── Delinquency by Product ─────────────────────────────────────────────────
+  { divider: true, label: 'Delinquency by Product' },
+  { value: 'delinq_rate_cc',                  label: 'Credit Card Delinq'  },
+  { value: 'delinq_rate_auto',                label: 'Auto Delinquency'    },
+  { value: 'delinq_rate_1st_mortgage',        label: '1st Mortgage Delinq' },
+  { value: 'delinq_rate_nonfarm_nonre',       label: 'Non-Farm Non-RE Delinq' },
+  { value: 'delinq_rate_commercial_re',       label: 'Commercial RE Delinq'},
   // ── Capital ────────────────────────────────────────────────────────────────
   { divider: true, label: 'Capital' },
   { value: 'net_worth_ratio',                 label: 'Net Worth Ratio'     },

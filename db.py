@@ -62,6 +62,30 @@ institutions_quarterly = Table(
     Column("acct_661A", BigInteger),    # net income
     # Capital
     Column("acct_RB0172", Float),       # risk-based capital ratio
+    # Loan composition (from FS220A)
+    Column("acct_396", BigInteger),     # credit card loans
+    Column("acct_385", BigInteger),     # new vehicle loans
+    Column("acct_370", BigInteger),     # used vehicle loans
+    Column("acct_703A", BigInteger),    # 1st lien RE loans
+    Column("acct_386A", BigInteger),    # junior lien RE loans
+    Column("acct_718A5", BigInteger),   # commercial RE secured
+    Column("acct_400P", BigInteger),    # commercial not RE
+    Column("acct_618A", BigInteger),    # total indirect loans
+    # Per-product delinquency totals (60+ day balances)
+    Column("acct_045B", BigInteger),    # total delinquent credit card loans (FS220B)
+    Column("acct_752", BigInteger),     # fixed rate 1st mortgage 60-179 day delinq (FS220B)
+    Column("acct_753", BigInteger),     # fixed rate 1st mortgage 180-359 day delinq (FS220B)
+    Column("acct_754", BigInteger),     # fixed rate 1st mortgage 360+ day delinq (FS220B)
+    Column("acct_041C1", BigInteger),   # total delinquent new vehicle loans (FS220I)
+    Column("acct_041C2", BigInteger),   # total delinquent used vehicle loans (FS220I)
+    Column("acct_041G1", BigInteger),   # total delinquent member business RE loans (FS220I)
+    Column("acct_041G2", BigInteger),   # total delinquent member business non-RE loans (FS220I)
+    Column("acct_041G3", BigInteger),   # total delinquent member commercial RE loans (FS220L)
+    Column("acct_041G4", BigInteger),   # total delinquent member commercial non-RE loans (FS220L)
+    Column("acct_041P1", BigInteger),   # total delinquent nonmember business RE loans (FS220I)
+    Column("acct_041P2", BigInteger),   # total delinquent nonmember business non-RE loans (FS220I)
+    Column("acct_041P3", BigInteger),   # total delinquent nonmember commercial RE loans (FS220L)
+    Column("acct_041P4", BigInteger),   # total delinquent nonmember commercial non-RE loans (FS220L)
     Column("ingested_at", DateTime, server_default=func.now()),
 )
 

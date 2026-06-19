@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 ADVERSE_METRICS: frozenset[str] = frozenset({
     "delinq_rate_total",
     "delinq_rate_90plus",
+    "delinq_rate_cc",
+    "delinq_rate_auto",
+    "delinq_rate_1st_mortgage",
+    "delinq_rate_commercial_re",
+    "delinq_rate_nonfarm_nonre",
     "chargeoff_rate_total_annualized",
     "oreo_to_assets",
     "non_accrual_rate",
@@ -111,6 +116,43 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     df["tdr_to_loans"] = pd.to_numeric(
         df.get("acct_1001F", pd.Series(dtype=float, index=df.index)), errors="coerce"
     ) / loans
+
+    # Per-product delinquency rates
+    def _coerce(col: str) -> pd.Series:
+        return pd.to_numeric(
+            df.get(col, pd.Series(0, index=df.index, dtype=float)), errors="coerce"
+        ).fillna(0)
+
+    cc_loans = pd.to_numeric(
+        df.get("acct_396", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_cc"] = _coerce("acct_045B") / cc_loans
+
+    auto_loans = (_coerce("acct_385") + _coerce("acct_370")).replace(0, np.nan)
+    df["delinq_rate_auto"] = (_coerce("acct_041C1") + _coerce("acct_041C2")) / auto_loans
+
+    mortgage_loans = pd.to_numeric(
+        df.get("acct_703A", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_1st_mortgage"] = (
+        _coerce("acct_752") + _coerce("acct_753") + _coerce("acct_754")
+    ) / mortgage_loans
+
+    comm_re_loans = pd.to_numeric(
+        df.get("acct_718A5", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_commercial_re"] = (
+        _coerce("acct_041G1") + _coerce("acct_041G3")
+        + _coerce("acct_041P1") + _coerce("acct_041P3")
+    ) / comm_re_loans
+
+    nonfarm_loans = pd.to_numeric(
+        df.get("acct_400P", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_nonfarm_nonre"] = (
+        _coerce("acct_041G2") + _coerce("acct_041G4")
+        + _coerce("acct_041P2") + _coerce("acct_041P4")
+    ) / nonfarm_loans
 
     return df
 
