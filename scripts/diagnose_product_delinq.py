@@ -12,8 +12,12 @@ Checks:
 import os, sys, zipfile, glob
 from pathlib import Path
 
+# Add project root to path so db, processing, ingestion modules are importable
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(PROJECT_ROOT / ".env")
 
 import pandas as pd
 from sqlalchemy import create_engine, text
