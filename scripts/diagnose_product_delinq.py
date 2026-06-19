@@ -12,12 +12,15 @@ Checks:
 import os, sys, zipfile, glob
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 import pandas as pd
 from sqlalchemy import create_engine, text
 
 db_url = os.environ.get("DATABASE_URL")
 if not db_url:
-    print("ERROR: DATABASE_URL not set")
+    print("ERROR: DATABASE_URL not set — create a .env file with DATABASE_URL=postgresql://...")
     sys.exit(1)
 
 engine = create_engine(db_url)
