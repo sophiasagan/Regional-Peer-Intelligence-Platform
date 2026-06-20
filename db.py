@@ -41,6 +41,9 @@ institutions_quarterly = Table(
     Column("acct_023B", BigInteger),    # 360+ day delinquent
     Column("acct_041B", BigInteger),    # total 60+ day delinquent balance
     Column("acct_041A", Integer),       # total 60+ day delinquent count
+    Column("acct_041D", BigInteger),    # 60+ day delinquent fixed-rate 1st mortgage (FS220A)
+    Column("acct_041E", BigInteger),    # 60+ day delinquent ARM 1st mortgage (FS220A)
+    Column("acct_041F", BigInteger),    # 60+ day delinquent other 1st mortgage (FS220A)
     # Non-accrual
     Column("acct_DL0145", BigInteger),  # non-commercial non-accrual
     Column("acct_DL0146", BigInteger),  # commercial non-accrual

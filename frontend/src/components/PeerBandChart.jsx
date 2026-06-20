@@ -438,7 +438,12 @@ export default function PeerBandChart({
         <ComposedChart data={plotData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
           <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={axisTickFmt} width={62} />
+          <YAxis
+            tick={{ fontSize: 11 }}
+            tickFormatter={axisTickFmt}
+            width={62}
+            domain={[0, dataMax => Math.max(dataMax * 1.25, unit === '%' ? 0.005 : 1)]}
+          />
           <Tooltip
             content={<CustomTooltip unit={unit} isAdverse={isAdverse} />}
           />

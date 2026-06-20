@@ -131,11 +131,14 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     auto_loans = (_coerce("acct_385") + _coerce("acct_370")).replace(0, np.nan)
     df["delinq_rate_auto"] = (_coerce("acct_041C1") + _coerce("acct_041C2")) / auto_loans
 
+    # 1st mortgage: use 041D (fixed) + 041E (ARM) + 041F (other) from FS220A — these are
+    # the total 60+ day delinquent balances by rate type. The 752/753/754 codes in FS220B
+    # are per-bucket fixed-rate only and miss ARM delinquency.
     mortgage_loans = pd.to_numeric(
         df.get("acct_703A", pd.Series(dtype=float, index=df.index)), errors="coerce"
     ).replace(0, np.nan)
     df["delinq_rate_1st_mortgage"] = (
-        _coerce("acct_752") + _coerce("acct_753") + _coerce("acct_754")
+        _coerce("acct_041D") + _coerce("acct_041E") + _coerce("acct_041F")
     ) / mortgage_loans
 
     comm_re_loans = pd.to_numeric(

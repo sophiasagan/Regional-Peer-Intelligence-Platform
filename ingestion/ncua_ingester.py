@@ -59,6 +59,10 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_023B": "acct_023B",
     "ACCT_041B": "acct_041B",
     "ACCT_041A": "acct_041A",
+    # 1st mortgage delinquency totals by rate type (FS220A — all 60+ day)
+    "ACCT_041D": "acct_041D",       # fixed-rate 1st mortgage 60+ day delinquent
+    "ACCT_041E": "acct_041E",       # ARM 1st mortgage 60+ day delinquent
+    "ACCT_041F": "acct_041F",       # other 1st mortgage 60+ day delinquent
     # non-accrual
     "ACCT_DL0145": "acct_DL0145",
     "DL0145": "acct_DL0145",
@@ -148,7 +152,8 @@ NCUA_BULK_URL_TEMPLATE = (
 _BIGINT_COLS = [
     "acct_010", "acct_018", "acct_025B", "acct_797",
     "acct_020B", "acct_DL0141", "acct_021B", "acct_022B", "acct_023B",
-    "acct_041B", "acct_041A", "acct_DL0145", "acct_DL0146",
+    "acct_041B", "acct_041A", "acct_041D", "acct_041E", "acct_041F",
+    "acct_DL0145", "acct_DL0146",
     "acct_550", "acct_551", "acct_680", "acct_550C1", "acct_550C2",
     "acct_AS0048", "acct_719",
     "acct_115", "acct_IS0010", "acct_IS0017", "acct_117", "acct_671", "acct_661A",
