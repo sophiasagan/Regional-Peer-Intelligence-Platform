@@ -412,17 +412,17 @@ class LoanTypeBreakdownResponse(BaseModel):
     loan_types: list[LoanTypeRow]
 
 
-# Mapping from internal key to (display label, balance acct codes, delinq acct code or None)
-# delinq acct = None until NCUA 5300 per-product delinquency fields are verified + ingested.
-# Verify field names against NCUA data dictionary before populating.
+# (loan_type_key, display_label, balance_cols, computed_ratio_name_or_None)
+# computed_ratio_name references a column produced by compute_ratios() — not a raw acct code.
 _LOAN_TYPE_DEFS: list[tuple[str, str, list[str], Optional[str]]] = [
     ("real_estate",      "Real Estate",       ["acct_703A", "acct_386A", "acct_718A5"],  None),
-    ("first_mortgage",   "1st Mortgage",      ["acct_703A"],                             None),
-    ("auto_total",       "Auto (Total)",      ["acct_385", "acct_370"],                  None),
+    ("first_mortgage",   "1st Mortgage",      ["acct_703A"],                             "delinq_rate_1st_mortgage"),
+    ("auto_total",       "Auto (Total)",      ["acct_385", "acct_370"],                  "delinq_rate_auto"),
     ("auto_new",         "New Auto",          ["acct_385"],                              None),
     ("auto_used",        "Used Auto",         ["acct_370"],                              None),
-    ("credit_card",      "Credit Card",       ["acct_396"],                              None),
-    ("commercial",       "Commercial",        ["acct_718A5", "acct_400P"],               None),
+    ("credit_card",      "Credit Card",       ["acct_396"],                              "delinq_rate_cc"),
+    ("commercial_re",    "Commercial RE",     ["acct_718A5"],                            "delinq_rate_commercial_re"),
+    ("nonfarm_nonre",    "Non-Farm Non-RE",   ["acct_400P"],                             "delinq_rate_nonfarm_nonre"),
     ("indirect",         "Indirect",          ["acct_618A"],                             None),
 ]
 
@@ -462,21 +462,32 @@ async def get_loan_type_breakdown(
     peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
     label = peer_group_label(group_type, charter_number, period, DB_URL)
 
+    # Pre-fetch peer medians for all metrics that have a delinq_col
+    peer_medians: dict[str, Optional[float]] = {}
+    for _, _, _, delinq_col in _LOAN_TYPE_DEFS:
+        if delinq_col and delinq_col not in peer_medians:
+            dist = compute_peer_distribution(delinq_col, peer_charters, period, DB_URL)
+            p50 = dist.get("p50")
+            peer_medians[delinq_col] = float(p50) if p50 is not None and not math.isnan(float(p50)) else None
+
     loan_rows = []
+    has_any_delinq = False
     for loan_type, display_label, balance_cols, delinq_col in _LOAN_TYPE_DEFS:
-        inst_bal = sum(
-            float(inst.get(col) or 0) for col in balance_cols
-        )
+        inst_bal = sum(float(inst.get(col) or 0) for col in balance_cols)
         pct = (inst_bal / total_loans) if (total_loans and inst_bal) else None
-        inst_rate = float(inst.get(delinq_col)) if delinq_col and inst.get(delinq_col) is not None else None
-        if inst_rate is not None and math.isnan(inst_rate):
-            inst_rate = None
+
+        inst_rate = None
+        if delinq_col:
+            raw = inst.get(delinq_col)
+            if raw is not None and not (isinstance(raw, float) and math.isnan(raw)):
+                inst_rate = float(raw)
+                has_any_delinq = True
 
         loan_rows.append(LoanTypeRow(
             loan_type=loan_type,
             label=display_label,
             institution_rate=inst_rate,
-            peer_median_rate=None,    # populated once per-product delinquency fields are ingested
+            peer_median_rate=peer_medians.get(delinq_col) if delinq_col else None,
             institution_balance=int(inst_bal) if inst_bal else None,
             pct_of_total_loans=round(pct, 4) if pct is not None else None,
         ))
@@ -486,7 +497,7 @@ async def get_loan_type_breakdown(
         period=period,
         peer_group_label=label,
         peer_count=len(peer_charters),
-        has_granular_delinquency=False,
+        has_granular_delinquency=has_any_delinq,
         loan_types=loan_rows,
     )
 
