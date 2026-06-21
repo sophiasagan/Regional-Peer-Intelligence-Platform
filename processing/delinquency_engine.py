@@ -100,10 +100,11 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     shares = df.get("acct_018", pd.Series(dtype=float, index=df.index)).replace(0, np.nan)
     df["loan_to_share"] = df.get("acct_025B", pd.Series(dtype=float, index=df.index)) / shares
 
-    # Risk-based capital ratio — stored directly as acct_RB0172
+    # NCUA stores acct_RB0172 as basis points (e.g. 1095 = 10.95%).
+    # Divide by 10000 to get decimal fraction so frontend * 100 displays correctly.
     df["rbc_ratio"] = pd.to_numeric(
         df.get("acct_RB0172", pd.Series(dtype=float, index=df.index)), errors="coerce"
-    )
+    ) / 10000
 
     # Non-accrual rate = (non-commercial + commercial non-accrual) / total loans
     non_accrual = (
