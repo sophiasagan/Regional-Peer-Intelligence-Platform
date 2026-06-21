@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, Cell,
+  Tooltip, Legend, ResponsiveContainer, Cell, LabelList,
 } from 'recharts';
 
 const API = import.meta.env.VITE_API_URL ?? '';
@@ -100,6 +100,10 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
 
   const peerLabel = result?.peer_group_label ?? peerGroup;
 
+  // Only show rows that have at least one delinquency value — avoids Indirect etc.
+  // collapsing the Y-axis scale with composition % values
+  const delinqData = chartData.filter(d => d.inst_pct != null || d.peer_pct != null);
+
   return (
     <div className="loan-breakdown-wrapper">
       <div className="chart-header">
@@ -132,58 +136,90 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
         </div>
       )}
 
-      {!loading && rows.length > 0 && hasDelinq && (
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 8, bottom: 64 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+      {!loading && delinqData.length > 0 && hasDelinq && (
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart
+            data={delinqData}
+            margin={{ top: 24, right: 24, left: 8, bottom: 56 }}
+            barCategoryGap="30%"
+            barGap={4}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E8" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 11 }}
-              angle={-35}
+              tick={{ fontSize: 11, fill: '#555' }}
+              angle={-30}
               textAnchor="end"
               interval={0}
+              tickLine={false}
             />
             <YAxis
-              tickFormatter={v => `${v.toFixed(1)}%`}
-              tick={{ fontSize: 11 }}
+              tickFormatter={v => `${v.toFixed(2)}%`}
+              tick={{ fontSize: 11, fill: '#555' }}
+              tickLine={false}
+              axisLine={false}
+              width={56}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Legend verticalAlign="top" height={28} />
-            {/* comp_pct shown as light-gray stub for rows with no delinquency code (e.g. Indirect) */}
-            <Bar dataKey="comp_pct" name="Portfolio share" fill="#E0E0E0" maxBarSize={26}
-                 hide={false} legendType="none"
-                 label={false} />
-            <Bar dataKey="inst_pct" name="Your institution" maxBarSize={26} minPointSize={3}>
-              {chartData.map((entry, i) => (
+            <Legend
+              verticalAlign="top"
+              height={32}
+              iconType="square"
+              wrapperStyle={{ fontSize: 12 }}
+            />
+            <Bar dataKey="inst_pct" name="Your institution" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
+              {delinqData.map((entry, i) => (
                 <Cell
                   key={i}
-                  fill={entry.inst_pct == null ? 'transparent'
-                        : entry.above_peer ? '#EF9A9A' : '#A5D6A7'}
+                  fill={entry.above_peer ? '#E53935' : '#43A047'}
                 />
               ))}
+              <LabelList
+                dataKey="inst_pct"
+                position="top"
+                formatter={v => v != null ? `${v.toFixed(2)}%` : ''}
+                style={{ fontSize: 10, fill: '#333', fontWeight: 600 }}
+              />
             </Bar>
-            <Bar dataKey="peer_pct" name={peerLabel} fill="#90A4AE" maxBarSize={26} minPointSize={3} />
+            <Bar dataKey="peer_pct" name={peerLabel} fill="#90A4AE" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
+              <LabelList
+                dataKey="peer_pct"
+                position="top"
+                formatter={v => v != null ? `${v.toFixed(2)}%` : ''}
+                style={{ fontSize: 10, fill: '#666' }}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       )}
 
       {!loading && rows.length > 0 && !hasDelinq && (
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 8, bottom: 64 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={chartData} margin={{ top: 16, right: 24, left: 8, bottom: 56 }} barCategoryGap="35%">
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E8" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 11 }}
-              angle={-35}
+              tick={{ fontSize: 11, fill: '#555' }}
+              angle={-30}
               textAnchor="end"
               interval={0}
+              tickLine={false}
             />
             <YAxis
               tickFormatter={v => `${v.toFixed(0)}%`}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: '#555' }}
+              tickLine={false}
+              axisLine={false}
             />
             <Tooltip formatter={v => `${v?.toFixed(1)}% of loans`} />
-            <Bar dataKey="comp_pct" name="Portfolio share %" fill="#64B5F6" maxBarSize={32} />
+            <Bar dataKey="comp_pct" name="Portfolio share %" fill="#64B5F6" maxBarSize={44} radius={[3,3,0,0]}>
+              <LabelList
+                dataKey="comp_pct"
+                position="top"
+                formatter={v => v != null ? `${v.toFixed(1)}%` : ''}
+                style={{ fontSize: 10, fill: '#333' }}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       )}
