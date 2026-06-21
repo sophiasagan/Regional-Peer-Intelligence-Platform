@@ -149,15 +149,20 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend verticalAlign="top" height={28} />
-            <Bar dataKey="inst_pct" name="Your institution" maxBarSize={26}>
+            {/* comp_pct shown as light-gray stub for rows with no delinquency code (e.g. Indirect) */}
+            <Bar dataKey="comp_pct" name="Portfolio share" fill="#E0E0E0" maxBarSize={26}
+                 hide={false} legendType="none"
+                 label={false} />
+            <Bar dataKey="inst_pct" name="Your institution" maxBarSize={26} minPointSize={3}>
               {chartData.map((entry, i) => (
                 <Cell
                   key={i}
-                  fill={entry.above_peer ? '#EF9A9A' : '#A5D6A7'}
+                  fill={entry.inst_pct == null ? 'transparent'
+                        : entry.above_peer ? '#EF9A9A' : '#A5D6A7'}
                 />
               ))}
             </Bar>
-            <Bar dataKey="peer_pct" name={peerLabel} fill="#90A4AE" maxBarSize={26} />
+            <Bar dataKey="peer_pct" name={peerLabel} fill="#90A4AE" maxBarSize={26} minPointSize={3} />
           </BarChart>
         </ResponsiveContainer>
       )}

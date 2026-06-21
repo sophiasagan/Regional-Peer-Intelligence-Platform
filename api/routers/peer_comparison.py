@@ -415,14 +415,13 @@ class LoanTypeBreakdownResponse(BaseModel):
 # (loan_type_key, display_label, balance_cols, computed_ratio_name_or_None)
 # computed_ratio_name references a column produced by compute_ratios() — not a raw acct code.
 _LOAN_TYPE_DEFS: list[tuple[str, str, list[str], Optional[str]]] = [
-    ("real_estate",      "Real Estate",       ["acct_703A", "acct_386A", "acct_718A5"],  None),
+    ("real_estate",      "Real Estate",       ["acct_703A", "acct_386A", "acct_718A5"],  "delinq_rate_real_estate"),
     ("first_mortgage",   "1st Mortgage",      ["acct_703A"],                             "delinq_rate_1st_mortgage"),
     ("auto_total",       "Auto (Total)",      ["acct_385", "acct_370"],                  "delinq_rate_auto"),
     ("auto_new",         "New Auto",          ["acct_385"],                              "delinq_rate_new_auto"),
     ("auto_used",        "Used Auto",         ["acct_370"],                              "delinq_rate_used_auto"),
     ("credit_card",      "Credit Card",       ["acct_396"],                              "delinq_rate_cc"),
-    ("commercial_re",    "Commercial RE",     ["acct_718A5"],                            "delinq_rate_commercial_re"),
-    ("nonfarm_nonre",    "Non-Farm Non-RE",   ["acct_400P"],                             "delinq_rate_nonfarm_nonre"),
+    ("commercial",       "Commercial",        ["acct_718A5", "acct_400P"],               "delinq_rate_commercial_total"),
     ("indirect",         "Indirect",          ["acct_618A"],                             None),
 ]
 

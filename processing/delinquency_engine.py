@@ -34,8 +34,10 @@ ADVERSE_METRICS: frozenset[str] = frozenset({
     "delinq_rate_new_auto",
     "delinq_rate_used_auto",
     "delinq_rate_1st_mortgage",
+    "delinq_rate_real_estate",
     "delinq_rate_commercial_re",
     "delinq_rate_nonfarm_nonre",
+    "delinq_rate_commercial_total",
     "chargeoff_rate_total_annualized",
     "oreo_to_assets",
     "non_accrual_rate",
@@ -169,6 +171,27 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
         _coerce("acct_041G2") + _coerce("acct_041G4")
         + _coerce("acct_041P2") + _coerce("acct_041P4")
     ) / nonfarm_loans
+
+    # Combined commercial (RE + non-farm non-RE) — denominator is all commercial loans
+    comm_total_loans = (
+        _coerce("acct_718A5") + _coerce("acct_400P")
+    ).replace(0, np.nan)
+    df["delinq_rate_commercial_total"] = (
+        _coerce("acct_041G1") + _coerce("acct_041G2")
+        + _coerce("acct_041G3") + _coerce("acct_041G4")
+        + _coerce("acct_041P1") + _coerce("acct_041P2")
+        + _coerce("acct_041P3") + _coerce("acct_041P4")
+    ) / comm_total_loans
+
+    # Total real estate (1st mortgage + commercial RE) — no junior-lien delinquency code in NCUA 5300
+    re_total_loans = (
+        _coerce("acct_703A") + _coerce("acct_718A5")
+    ).replace(0, np.nan)
+    df["delinq_rate_real_estate"] = (
+        _coerce("acct_041D") + _coerce("acct_041E") + _coerce("acct_041F")
+        + _coerce("acct_041G1") + _coerce("acct_041G3")
+        + _coerce("acct_041P1") + _coerce("acct_041P3")
+    ) / re_total_loans
 
     return df
 
