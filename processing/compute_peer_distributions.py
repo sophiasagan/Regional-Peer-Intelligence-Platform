@@ -47,6 +47,7 @@ METRICS = [
     "delinq_rate_nonfarm_nonre",
     "delinq_rate_commercial_re",
     "delinq_rate_commercial_total",
+    "delinq_rate_indirect",
     # Capital & earnings
     "net_worth_ratio",
     "rbc_ratio",

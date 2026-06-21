@@ -76,7 +76,9 @@ institutions_quarterly = Table(
     Column("acct_718A5", BigInteger),   # commercial RE secured
     Column("acct_400P", BigInteger),    # commercial not RE
     Column("acct_618A", BigInteger),    # total indirect loans
+    Column("acct_381", BigInteger),     # auto/vehicle leases balance (FS220A)
     # Per-product delinquency totals (60+ day balances)
+    Column("acct_041I", BigInteger),    # total delinquent indirect/lease loans (FS220B)
     Column("acct_045B", BigInteger),    # total delinquent credit card loans (FS220B)
     Column("acct_752", BigInteger),     # fixed rate 1st mortgage 60-179 day delinq (FS220B)
     Column("acct_753", BigInteger),     # fixed rate 1st mortgage 180-359 day delinq (FS220B)

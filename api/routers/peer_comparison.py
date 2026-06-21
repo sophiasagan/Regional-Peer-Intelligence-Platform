@@ -422,7 +422,8 @@ _LOAN_TYPE_DEFS: list[tuple[str, str, list[str], Optional[str]]] = [
     ("auto_used",        "Used Auto",         ["acct_370"],                              "delinq_rate_used_auto"),
     ("credit_card",      "Credit Card",       ["acct_396"],                              "delinq_rate_cc"),
     ("commercial",       "Commercial",        ["acct_718A5", "acct_400P"],               "delinq_rate_commercial_total"),
-    ("indirect",         "Indirect",          ["acct_618A"],                             None),
+    ("indirect",         "Indirect",          ["acct_618A"],                             "delinq_rate_indirect"),
+    ("auto_lease",       "Auto Lease",        ["acct_381"],                              None),
 ]
 
 

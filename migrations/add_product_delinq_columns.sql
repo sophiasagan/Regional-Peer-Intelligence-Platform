@@ -32,4 +32,7 @@ ALTER TABLE institutions_quarterly
   -- 1st mortgage delinquency totals by rate type (FS220A — all 60+ day)
   ADD COLUMN IF NOT EXISTS "acct_041D" BIGINT,   -- fixed-rate 1st mortgage 60+ day delinquent
   ADD COLUMN IF NOT EXISTS "acct_041E" BIGINT,   -- ARM 1st mortgage 60+ day delinquent
-  ADD COLUMN IF NOT EXISTS "acct_041F" BIGINT;   -- other 1st mortgage 60+ day delinquent
+  ADD COLUMN IF NOT EXISTS "acct_041F" BIGINT,   -- other 1st mortgage 60+ day delinquent
+  -- Indirect loans and auto lease (FS220A / FS220B)
+  ADD COLUMN IF NOT EXISTS acct_381    BIGINT,   -- auto/vehicle leases balance (FS220A)
+  ADD COLUMN IF NOT EXISTS "acct_041I" BIGINT;   -- total delinquent indirect/lease loans (FS220B)

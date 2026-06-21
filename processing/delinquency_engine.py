@@ -38,6 +38,7 @@ ADVERSE_METRICS: frozenset[str] = frozenset({
     "delinq_rate_commercial_re",
     "delinq_rate_nonfarm_nonre",
     "delinq_rate_commercial_total",
+    "delinq_rate_indirect",
     "chargeoff_rate_total_annualized",
     "oreo_to_assets",
     "non_accrual_rate",
@@ -192,6 +193,12 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
         + _coerce("acct_041G1") + _coerce("acct_041G3")
         + _coerce("acct_041P1") + _coerce("acct_041P3")
     ) / re_total_loans
+
+    # Indirect loans: acct_041I is the 60+ day delinquent balance for indirect/lease (FS220B)
+    indirect_loans = pd.to_numeric(
+        df.get("acct_618A", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_indirect"] = _coerce("acct_041I") / indirect_loans
 
     return df
 
