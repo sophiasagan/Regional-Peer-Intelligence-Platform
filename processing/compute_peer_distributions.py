@@ -40,6 +40,8 @@ METRICS = [
     # Per-product delinquency rates
     "delinq_rate_cc",
     "delinq_rate_auto",
+    "delinq_rate_new_auto",
+    "delinq_rate_used_auto",
     "delinq_rate_1st_mortgage",
     "delinq_rate_nonfarm_nonre",
     "delinq_rate_commercial_re",

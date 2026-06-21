@@ -31,6 +31,8 @@ ADVERSE_METRICS: frozenset[str] = frozenset({
     "delinq_rate_90plus",
     "delinq_rate_cc",
     "delinq_rate_auto",
+    "delinq_rate_new_auto",
+    "delinq_rate_used_auto",
     "delinq_rate_1st_mortgage",
     "delinq_rate_commercial_re",
     "delinq_rate_nonfarm_nonre",
@@ -131,6 +133,16 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
 
     auto_loans = (_coerce("acct_385") + _coerce("acct_370")).replace(0, np.nan)
     df["delinq_rate_auto"] = (_coerce("acct_041C1") + _coerce("acct_041C2")) / auto_loans
+
+    new_auto_loans = pd.to_numeric(
+        df.get("acct_385", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_new_auto"] = _coerce("acct_041C1") / new_auto_loans
+
+    used_auto_loans = pd.to_numeric(
+        df.get("acct_370", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_used_auto"] = _coerce("acct_041C2") / used_auto_loans
 
     # 1st mortgage: use 041D (fixed) + 041E (ARM) + 041F (other) from FS220A — these are
     # the total 60+ day delinquent balances by rate type. The 752/753/754 codes in FS220B
