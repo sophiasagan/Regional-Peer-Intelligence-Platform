@@ -104,7 +104,8 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_400P": "acct_400P",
     "ACCT_618A": "acct_618A",
     # loan composition additions (FS220A)
-    "ACCT_381": "acct_381",         # auto/vehicle leases balance
+    "ACCT_002": "acct_002",         # leases receivable balance (Schedule A Section 1, Row 7)
+    "ACCT_381": "acct_381",         # previously assumed lease balance — not used
     # per-product delinquency totals (60+ day) — FS220B
     "ACCT_041I": "acct_041I",       # total delinquent indirect/lease loans
     "ACCT_045B": "acct_045B",       # total delinquent credit card loans
@@ -162,8 +163,9 @@ _BIGINT_COLS = [
     "acct_115", "acct_IS0010", "acct_IS0017", "acct_117", "acct_671", "acct_661A",
     "acct_083",
     # loan composition
+    "acct_002",                                          # leases receivable (confirmed from Schedule A)
     "acct_396", "acct_385", "acct_370", "acct_703A", "acct_386A",
-    "acct_718A5", "acct_400P", "acct_618A", "acct_381",
+    "acct_718A5", "acct_400P", "acct_618A",
     # TDR / modifications
     "acct_1001F",
     # per-product delinquency

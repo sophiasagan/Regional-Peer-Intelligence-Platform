@@ -76,9 +76,10 @@ institutions_quarterly = Table(
     Column("acct_718A5", BigInteger),   # commercial RE secured
     Column("acct_400P", BigInteger),    # commercial not RE
     Column("acct_618A", BigInteger),    # total indirect loans
-    Column("acct_381", BigInteger),     # auto/vehicle leases balance (FS220A)
-    # Per-product delinquency totals (60+ day balances)
-    Column("acct_041I", BigInteger),    # total delinquent indirect/lease loans (FS220B)
+    Column("acct_002", BigInteger),     # leases receivable balance (FS220A Sched A Sec1 Row7 confirmed)
+    # Per-product delinquency totals (60+ day balances) — confirmed from Dort Q1 2026 Schedule A Sec2
+    # 041D=leases, 041E=junior lien RE, 041F=1st lien RE (all FS220A)
+    Column("acct_041I", BigInteger),    # total delinquent indirect loans (FS220B)
     Column("acct_045B", BigInteger),    # total delinquent credit card loans (FS220B)
     Column("acct_752", BigInteger),     # fixed rate 1st mortgage 60-179 day delinq (FS220B)
     Column("acct_753", BigInteger),     # fixed rate 1st mortgage 180-359 day delinq (FS220B)

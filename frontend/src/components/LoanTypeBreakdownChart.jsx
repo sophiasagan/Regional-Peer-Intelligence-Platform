@@ -23,7 +23,8 @@ import {
 const API = import.meta.env.VITE_API_URL ?? '';
 
 // Loan types that have no separate NCUA delinquency code — show N/A stubs
-const NO_DELINQ_TRACKING = new Set(['auto_lease']);
+// (currently none — auto_lease uses acct_041D confirmed from Schedule A Sec2 Row 7)
+const NO_DELINQ_TRACKING = new Set([]);
 
 function downloadCsv(data, charterNumber, period, peerGroupLabel) {
   if (!data?.length) return;

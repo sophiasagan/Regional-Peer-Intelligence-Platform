@@ -48,6 +48,8 @@ METRICS = [
     "delinq_rate_commercial_re",
     "delinq_rate_commercial_total",
     "delinq_rate_indirect",
+    "delinq_rate_auto_lease",
+    "delinq_rate_junior_lien",
     # Capital & earnings
     "net_worth_ratio",
     "rbc_ratio",

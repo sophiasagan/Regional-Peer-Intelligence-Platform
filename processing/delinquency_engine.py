@@ -39,6 +39,8 @@ ADVERSE_METRICS: frozenset[str] = frozenset({
     "delinq_rate_nonfarm_nonre",
     "delinq_rate_commercial_total",
     "delinq_rate_indirect",
+    "delinq_rate_auto_lease",
+    "delinq_rate_junior_lien",
     "chargeoff_rate_total_annualized",
     "oreo_to_assets",
     "non_accrual_rate",
@@ -147,15 +149,24 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     ).replace(0, np.nan)
     df["delinq_rate_used_auto"] = _coerce("acct_041C2") / used_auto_loans
 
-    # 1st mortgage: use 041D (fixed) + 041E (ARM) + 041F (other) from FS220A — these are
-    # the total 60+ day delinquent balances by rate type. The 752/753/754 codes in FS220B
-    # are per-bucket fixed-rate only and miss ARM delinquency.
+    # Lease delinquency: confirmed from Dort Q1 2026 Schedule A Section 2 Row 7.
+    # acct_041D = 60+ day delinquent leases (not "fixed-rate mortgage" as previously assumed).
+    # acct_041E = 60+ day delinquent junior lien RE (Schedule A Sec2 Row 10).
+    # acct_041F = 60+ day delinquent 1st lien RE (Schedule A Sec2 Row 9, bulk alias for DL0062).
+    lease_loans = pd.to_numeric(
+        df.get("acct_002", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_auto_lease"] = _coerce("acct_041D") / lease_loans
+
+    junior_lien_loans = pd.to_numeric(
+        df.get("acct_386A", pd.Series(dtype=float, index=df.index)), errors="coerce"
+    ).replace(0, np.nan)
+    df["delinq_rate_junior_lien"] = _coerce("acct_041E") / junior_lien_loans
+
     mortgage_loans = pd.to_numeric(
         df.get("acct_703A", pd.Series(dtype=float, index=df.index)), errors="coerce"
     ).replace(0, np.nan)
-    df["delinq_rate_1st_mortgage"] = (
-        _coerce("acct_041D") + _coerce("acct_041E") + _coerce("acct_041F")
-    ) / mortgage_loans
+    df["delinq_rate_1st_mortgage"] = _coerce("acct_041F") / mortgage_loans
 
     comm_re_loans = pd.to_numeric(
         df.get("acct_718A5", pd.Series(dtype=float, index=df.index)), errors="coerce"
@@ -184,12 +195,13 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
         + _coerce("acct_041P3") + _coerce("acct_041P4")
     ) / comm_total_loans
 
-    # Total real estate (1st mortgage + commercial RE) — no junior-lien delinquency code in NCUA 5300
+    # Total real estate: 1st lien (041F) + junior lien (041E) + commercial RE (G1/G3/P1/P3)
+    # Denominator includes all RE loan balances. acct_041D is leases — excluded here.
     re_total_loans = (
-        _coerce("acct_703A") + _coerce("acct_718A5")
+        _coerce("acct_703A") + _coerce("acct_386A") + _coerce("acct_718A5")
     ).replace(0, np.nan)
     df["delinq_rate_real_estate"] = (
-        _coerce("acct_041D") + _coerce("acct_041E") + _coerce("acct_041F")
+        _coerce("acct_041E") + _coerce("acct_041F")
         + _coerce("acct_041G1") + _coerce("acct_041G3")
         + _coerce("acct_041P1") + _coerce("acct_041P3")
     ) / re_total_loans
