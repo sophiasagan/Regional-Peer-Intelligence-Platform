@@ -120,10 +120,10 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
                   && d.institution_rate > d.peer_median_rate,
   }));
 
-  // Only show rows where the institution has a computed delinquency rate (even if 0.00%)
-  // Hides rows where NCUA data hasn't been ingested yet (null rate)
+  // Show rows where at least one bar is non-zero — hides categories with 0%/0% (no signal)
+  // and rows where NCUA data hasn't been ingested yet (null rate)
   const delinqData = hasDelinq
-    ? chartData.filter(d => d.has_rate)
+    ? chartData.filter(d => d.has_rate && ((d.inst_pct ?? 0) > 0 || (d.peer_pct ?? 0) > 0))
     : [];
 
   const peerLabel = result?.peer_group_label ?? peerGroup;
