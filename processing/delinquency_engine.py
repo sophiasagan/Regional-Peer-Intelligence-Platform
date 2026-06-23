@@ -163,10 +163,11 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     ).replace(0, np.nan)
     df["delinq_rate_junior_lien"] = _coerce("acct_041E") / junior_lien_loans
 
+    # acct_DL0062 = 1st lien RE 60+ day delinquent (Schedule A Sec2 Row 9, confirmed from Dort Q1 2026)
     mortgage_loans = pd.to_numeric(
         df.get("acct_703A", pd.Series(dtype=float, index=df.index)), errors="coerce"
     ).replace(0, np.nan)
-    df["delinq_rate_1st_mortgage"] = _coerce("acct_041F") / mortgage_loans
+    df["delinq_rate_1st_mortgage"] = _coerce("acct_DL0062") / mortgage_loans
 
     comm_re_loans = pd.to_numeric(
         df.get("acct_718A5", pd.Series(dtype=float, index=df.index)), errors="coerce"
@@ -195,13 +196,13 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
         + _coerce("acct_041P3") + _coerce("acct_041P4")
     ) / comm_total_loans
 
-    # Total real estate: 1st lien (041F) + junior lien (041E) + commercial RE (G1/G3/P1/P3)
+    # Total real estate: 1st lien (DL0062) + junior lien (041E) + commercial RE (G1/G3/P1/P3)
     # Denominator includes all RE loan balances. acct_041D is leases — excluded here.
     re_total_loans = (
         _coerce("acct_703A") + _coerce("acct_386A") + _coerce("acct_718A5")
     ).replace(0, np.nan)
     df["delinq_rate_real_estate"] = (
-        _coerce("acct_041E") + _coerce("acct_041F")
+        _coerce("acct_DL0062") + _coerce("acct_041E")
         + _coerce("acct_041G1") + _coerce("acct_041G3")
         + _coerce("acct_041P1") + _coerce("acct_041P3")
     ) / re_total_loans

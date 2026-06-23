@@ -48,15 +48,10 @@ function downloadCsv(data, charterNumber, period, peerGroupLabel) {
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
-  const isNA = payload[0]?.payload?.is_na;
   return (
     <div className="chart-tooltip">
       <p className="tooltip-label">{label}</p>
-      {isNA ? (
-        <p style={{ color: '#9E9E9E', fontStyle: 'italic', fontSize: 11 }}>
-          No separate NCUA delinquency code — balance shown in portfolio view
-        </p>
-      ) : payload.map(p => (
+      {payload.map(p => (
         <p key={p.dataKey} style={{ color: p.fill ?? p.color }}>
           {p.name}: {p.value != null ? `${p.value.toFixed(3)}%` : 'N/A'}
         </p>
@@ -65,40 +60,21 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-// Custom label renderer for bar tops — shows "N/A" for no-tracking rows, value% for others
-function makeLabel(displayData) {
-  return function LabelContent(props) {
-    const entry = displayData[props.index];
-    if (!entry) return null;
-    if (entry.is_na) {
-      return (
-        <text
-          x={props.x + props.width / 2}
-          y={(props.y ?? 0) - 4}
-          textAnchor="middle"
-          fontSize={9}
-          fill="#9E9E9E"
-          fontStyle="italic"
-        >
-          N/A
-        </text>
-      );
-    }
-    const v = props.value;
-    if (v == null) return null;
-    return (
-      <text
-        x={props.x + props.width / 2}
-        y={(props.y ?? 0) - 4}
-        textAnchor="middle"
-        fontSize={10}
-        fill="#333"
-        fontWeight={600}
-      >
-        {`${Number(v).toFixed(2)}%`}
-      </text>
-    );
-  };
+function ValueLabel(props) {
+  const v = props.value;
+  if (v == null) return null;
+  return (
+    <text
+      x={props.x + props.width / 2}
+      y={(props.y ?? 0) - 4}
+      textAnchor="middle"
+      fontSize={10}
+      fill={props.fill ?? '#333'}
+      fontWeight={600}
+    >
+      {`${Number(v).toFixed(2)}%`}
+    </text>
+  );
 }
 
 export default function LoanTypeBreakdownChart({ charterNumber, period, peerGroup, token }) {
@@ -126,44 +102,31 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
   const hasDelinq = result?.has_granular_delinquency;
   const rows      = result?.loan_types ?? [];
 
-  // Build chart data — include all rows that have a portfolio balance
-  const chartData = rows
-    .filter(d => d.pct_of_total_loans != null || d.institution_rate != null)
-    .map(d => {
-      const isNA = NO_DELINQ_TRACKING.has(d.loan_type) || (d.institution_rate == null && d.peer_median_rate == null && hasDelinq);
-      return {
-        name:       d.label,
-        loan_type:  d.loan_type,
-        is_na:      isNA,
-        has_rate:   d.institution_rate != null,
-        // Use 0 for N/A rows so minPointSize renders a visible stub
-        inst_pct:   hasDelinq ? (d.institution_rate != null ? +(d.institution_rate * 100).toFixed(3) : (isNA ? 0 : null)) : null,
-        peer_pct:   hasDelinq && d.peer_median_rate != null ? +(d.peer_median_rate * 100).toFixed(3) : (isNA ? 0 : null),
-        comp_pct:   d.pct_of_total_loans != null ? +(d.pct_of_total_loans * 100).toFixed(2) : null,
-        above_peer: !isNA && d.institution_rate != null && d.peer_median_rate != null
-                      && d.institution_rate > d.peer_median_rate,
-      };
-    });
+  // Build chart data
+  const chartData = rows.map(d => ({
+    name:       d.label,
+    loan_type:  d.loan_type,
+    has_rate:   d.institution_rate != null,
+    inst_pct:   hasDelinq && d.institution_rate != null
+                  ? +(d.institution_rate * 100).toFixed(3)
+                  : null,
+    peer_pct:   hasDelinq && d.peer_median_rate != null
+                  ? +(d.peer_median_rate * 100).toFixed(3)
+                  : null,
+    comp_pct:   d.pct_of_total_loans != null
+                  ? +(d.pct_of_total_loans * 100).toFixed(2)
+                  : null,
+    above_peer: d.institution_rate != null && d.peer_median_rate != null
+                  && d.institution_rate > d.peer_median_rate,
+  }));
 
-  // Delinquency chart: include rows with rates + N/A stubs (exclude rows with no balance at all)
+  // Only show rows where the institution has a computed delinquency rate (even if 0.00%)
+  // Hides rows where NCUA data hasn't been ingested yet (null rate)
   const delinqData = hasDelinq
-    ? chartData.filter(d => d.has_rate || d.is_na)
+    ? chartData.filter(d => d.has_rate)
     : [];
 
   const peerLabel = result?.peer_group_label ?? peerGroup;
-
-  const InstLabel  = makeLabel(delinqData);
-  const PeerLabelC = (props) => {
-    const entry = delinqData[props.index];
-    if (!entry || entry.is_na) return null;
-    const v = props.value;
-    if (v == null) return null;
-    return (
-      <text x={props.x + props.width / 2} y={(props.y ?? 0) - 4} textAnchor="middle" fontSize={10} fill="#666">
-        {`${Number(v).toFixed(2)}%`}
-      </text>
-    );
-  };
 
   return (
     <div className="loan-breakdown-wrapper">
@@ -231,35 +194,19 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
                 wrapperStyle={{ fontSize: 12 }}
               />
 
-              <Bar dataKey="inst_pct" name="Your institution" maxBarSize={36} minPointSize={8} radius={[3,3,0,0]}>
+              <Bar dataKey="inst_pct" name="Your institution" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
                 {delinqData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={entry.is_na ? '#E0E0E0' : entry.above_peer ? '#E53935' : '#43A047'}
-                    fillOpacity={entry.is_na ? 0.6 : 1}
-                  />
+                  <Cell key={i} fill={entry.above_peer ? '#E53935' : '#43A047'} />
                 ))}
-                <LabelList content={<InstLabel />} />
+                <LabelList content={<ValueLabel fill="#333" />} />
               </Bar>
 
-              <Bar dataKey="peer_pct" name={peerLabel} maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
-                {delinqData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={entry.is_na ? '#F5F5F5' : '#90A4AE'}
-                    fillOpacity={entry.is_na ? 0.4 : 1}
-                  />
-                ))}
-                <LabelList content={<PeerLabelC />} />
+              <Bar dataKey="peer_pct" name={peerLabel} fill="#90A4AE" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
+                <LabelList content={<ValueLabel fill="#666" />} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
 
-          {delinqData.some(d => d.is_na) && (
-            <p style={{ fontSize: 11, color: '#9E9E9E', margin: '4px 8px 0', fontStyle: 'italic' }}>
-              * N/A — no separate NCUA 5300 delinquency code; balance included in related auto totals
-            </p>
-          )}
         </>
       )}
 

@@ -59,10 +59,13 @@ NCUA_FIELD_MAP: dict[str, str] = {
     "ACCT_023B": "acct_023B",
     "ACCT_041B": "acct_041B",
     "ACCT_041A": "acct_041A",
-    # 1st mortgage delinquency totals by rate type (FS220A — all 60+ day)
-    "ACCT_041D": "acct_041D",       # fixed-rate 1st mortgage 60+ day delinquent
-    "ACCT_041E": "acct_041E",       # ARM 1st mortgage 60+ day delinquent
-    "ACCT_041F": "acct_041F",       # other 1st mortgage 60+ day delinquent
+    # Per-product 60+ day delinquency totals (FS220A). Confirmed from Dort Q1 2026 Schedule A Sec2:
+    # Row 7 = Leases → 041D; Row 9 = 1st Lien RE → DL0062; Row 10 = Junior Lien → 041E
+    "ACCT_041D": "acct_041D",       # leases receivable 60+ day delinquent (Sched A Sec2 Row 7)
+    "ACCT_041E": "acct_041E",       # junior lien RE 60+ day delinquent (Sched A Sec2 Row 10)
+    "ACCT_041F": "acct_041F",       # kept for completeness; appears 0 in bulk data
+    "ACCT_DL0062": "acct_DL0062",   # 1st lien RE 60+ day delinquent (Sched A Sec2 Row 9)
+    "DL0062": "acct_DL0062",        # bare code variant
     # non-accrual
     "ACCT_DL0145": "acct_DL0145",
     "DL0145": "acct_DL0145",
@@ -157,6 +160,7 @@ _BIGINT_COLS = [
     "acct_010", "acct_018", "acct_025B", "acct_797",
     "acct_020B", "acct_DL0141", "acct_021B", "acct_022B", "acct_023B",
     "acct_041B", "acct_041A", "acct_041D", "acct_041E", "acct_041F",
+    "acct_DL0062",                                        # 1st lien RE 60+ day (Sched A Sec2 Row 9)
     "acct_DL0145", "acct_DL0146",
     "acct_550", "acct_551", "acct_680", "acct_550C1", "acct_550C2",
     "acct_AS0048", "acct_719",
