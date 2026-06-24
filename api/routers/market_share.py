@@ -264,17 +264,24 @@ async def get_institution_heatmap(
         )
 
     # ── Batch-fetch county totals (one query each, not N+1) ───────────────────
+    # FDIC SOD is annual and lags ~6 months — fall back to prior years if needed
     try:
         with engine.connect() as conn:
-            fdic_rows = conn.execute(
-                sa_text(
-                    "SELECT county_fips, COALESCE(SUM(deposits), 0) AS total_fdic "
-                    "FROM fdic_deposits "
-                    "WHERE county_fips = ANY(:fips) AND year = :year "
-                    "GROUP BY county_fips"
-                ),
-                {"fips": fips_list, "year": year},
-            ).mappings().all()
+            fdic_rows: list = []
+            fdic_year_used = year
+            for try_year in [year, year - 1, year - 2]:
+                fdic_rows = conn.execute(
+                    sa_text(
+                        "SELECT county_fips, COALESCE(SUM(deposits), 0) AS total_fdic "
+                        "FROM fdic_deposits "
+                        "WHERE county_fips = ANY(:fips) AND year = :year "
+                        "GROUP BY county_fips"
+                    ),
+                    {"fips": fips_list, "year": try_year},
+                ).mappings().all()
+                if fdic_rows:
+                    fdic_year_used = try_year
+                    break
             fdic_by_fips: dict[str, float] = {r["county_fips"]: float(r["total_fdic"]) for r in fdic_rows}
 
             cu_rows = conn.execute(

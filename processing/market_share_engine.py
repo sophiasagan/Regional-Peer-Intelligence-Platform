@@ -108,9 +108,13 @@ def _fetch_fdic_deposits(
 ) -> pd.DataFrame:
     """Load bank/thrift deposit data from FDIC Summary of Deposits.
 
+    FDIC SOD is an annual snapshot (as of June 30). When the requested year
+    has no data yet (e.g. 2026 data requested but only 2024 ingested), falls
+    back up to 2 prior years so recent quarterly periods still return data.
+
     Returns columns: charter_or_cert, institution_name, metric_value, confidence, data_period
     """
-    def _query_county(fips: str) -> pd.DataFrame:
+    def _query_county(fips: str, y: int) -> pd.DataFrame:
         with engine.connect() as conn:
             result = conn.execute(
                 select(
@@ -119,12 +123,12 @@ def _fetch_fdic_deposits(
                     fdic_deposits.c.deposits,
                 ).where(
                     fdic_deposits.c.county_fips == fips,
-                    fdic_deposits.c.year == year,
+                    fdic_deposits.c.year == y,
                 )
             )
             return pd.DataFrame(result.mappings().all())
 
-    def _query_state(state_abbrev: str) -> pd.DataFrame:
+    def _query_state(state_abbrev: str, y: int) -> pd.DataFrame:
         with engine.connect() as conn:
             result = conn.execute(
                 select(
@@ -133,25 +137,35 @@ def _fetch_fdic_deposits(
                     fdic_deposits.c.deposits,
                 ).where(
                     fdic_deposits.c.state_code == state_abbrev,
-                    fdic_deposits.c.year == year,
+                    fdic_deposits.c.year == y,
                 )
             )
             return pd.DataFrame(result.mappings().all())
 
-    if geography_type == "county":
-        raw = _query_county(geography_id)
-    elif geography_type == "state":
-        raw = _query_state(geography_id)
-    elif geography_type in ("msa", "custom_region"):
-        counties = (
-            _resolve_msa_counties(geography_id, engine)
-            if geography_type == "msa"
-            else _resolve_custom_region_counties(geography_id, engine)
-        )
-        frames = [_query_county(c) for c in counties]
-        raw = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-    else:
-        raise ValueError(f"Unsupported geography_type: {geography_type}")
+    def _fetch_for_year(y: int) -> pd.DataFrame:
+        if geography_type == "county":
+            return _query_county(geography_id, y)
+        elif geography_type == "state":
+            return _query_state(geography_id, y)
+        elif geography_type in ("msa", "custom_region"):
+            counties = (
+                _resolve_msa_counties(geography_id, engine)
+                if geography_type == "msa"
+                else _resolve_custom_region_counties(geography_id, engine)
+            )
+            frames = [_query_county(c, y) for c in counties]
+            return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        else:
+            raise ValueError(f"Unsupported geography_type: {geography_type}")
+
+    # Try requested year then fall back — FDIC SOD lags by ~6 months
+    actual_year = year
+    raw = pd.DataFrame()
+    for try_year in [year, year - 1, year - 2]:
+        raw = _fetch_for_year(try_year)
+        if not raw.empty:
+            actual_year = try_year
+            break
 
     if raw.empty:
         return raw
@@ -166,7 +180,7 @@ def _fetch_fdic_deposits(
     agg["charter_or_cert"] = "fdic:" + agg["fdic_cert"].astype(str)
     agg["institution_type"] = "bank"
     agg["confidence"]       = "measured"
-    agg["data_period"]      = str(year)
+    agg["data_period"]      = str(actual_year)
     return agg[["charter_or_cert", "institution_name", "institution_type",
                 "metric_value", "confidence", "data_period"]]
 
