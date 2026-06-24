@@ -5,8 +5,13 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      external: ['mapbox-gl', '@mapbox/mapbox-gl-draw'],
+      output: {
+        manualChunks: {
+          maplibre: ['maplibre-gl'],
+        },
+      },
     },
+    chunkSizeWarningLimit: 2000,
   },
   server: {
     port: 5173,
