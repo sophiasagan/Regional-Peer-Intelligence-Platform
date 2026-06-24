@@ -198,87 +198,115 @@ async def get_institution_heatmap(
 ):
     """Return market share per county for a single institution — drives choropleth base layer.
 
-    Fetches from cu_deposit_allocations (for deposit/loan share per county) and
-    HMDA (for mortgage_originations per county), calculating each county's total
-    market to compute this institution's share.
-
-    Used by MarketMap.jsx to color all counties this institution operates in.
+    For deposits: reads cu_deposit_allocations (computed by compute_cu_allocations.py).
+    Uses FDIC branch totals + CU allocation totals as the county denominator.
+    Returns empty county list (not an error) when allocation data is not yet computed.
     """
     from sqlalchemy import text as sa_text
     from db import get_engine
 
-    engine = get_engine(DB_URL)
-    period = f"{year}Q4"   # Use Q4 of the requested year for NCUA data
+    engine  = get_engine(DB_URL)
+    # cu_deposit_allocations uses quarterly periods; prefer Q1 of the year so it
+    # works for both annual FDIC view (year) and the most-recently-ingested quarter.
+    # Try Q1 first, fall back through Q4 to find whichever quarter was ingested.
+    candidate_periods = [f"{year}Q1", f"{year}Q2", f"{year}Q3", f"{year}Q4",
+                         f"{year - 1}Q4", f"{year - 1}Q1"]
 
-    # ── Fetch counties where this institution has allocations ──────────────────
-    counties: list[HeatmapCounty] = []
-    inst_name: Optional[str] = None
+    alloc_rows: list = []
+    used_period: str  = f"{year}Q1"
 
     try:
         with engine.connect() as conn:
-            rows = conn.execute(
-                sa_text("""
-                    SELECT a.county_fips, a.allocated_deposits, a.confidence_level,
-                           i.institution_name
-                    FROM cu_deposit_allocations a
-                    LEFT JOIN (
-                        SELECT DISTINCT ON (charter_number) charter_number, institution_name
-                        FROM institutions_quarterly
-                        WHERE charter_number = :charter AND period = :period
-                    ) i ON TRUE
-                    WHERE a.charter_number = :charter AND a.period = :period
-                """),
-                {"charter": charter_number, "period": period},
+            for period in candidate_periods:
+                result = conn.execute(
+                    sa_text(
+                        "SELECT county_fips, allocated_deposits, confidence_level, institution_name "
+                        "FROM cu_deposit_allocations "
+                        "WHERE charter_number = :charter AND period = :period "
+                        "LIMIT 1000"
+                    ),
+                    {"charter": charter_number, "period": period},
+                ).mappings().all()
+                if result:
+                    alloc_rows  = list(result)
+                    used_period = period
+                    break
+    except Exception:
+        # Table doesn't exist yet — return empty response so map renders without CU layer
+        return HeatmapResponse(
+            charter_number=charter_number,
+            institution_name=None,
+            metric=metric,
+            year=year,
+            counties=[],
+        )
+
+    if not alloc_rows:
+        # Allocation not yet computed — instruct caller to run compute_cu_allocations
+        return HeatmapResponse(
+            charter_number=charter_number,
+            institution_name=None,
+            metric=metric,
+            year=year,
+            counties=[],
+        )
+
+    inst_name = alloc_rows[0]["institution_name"] or f"Charter {charter_number}"
+    fips_list = [r["county_fips"] for r in alloc_rows if (r["allocated_deposits"] or 0) > 0]
+
+    if not fips_list:
+        return HeatmapResponse(
+            charter_number=charter_number,
+            institution_name=inst_name,
+            metric=metric,
+            year=year,
+            counties=[],
+        )
+
+    # ── Batch-fetch county totals (one query each, not N+1) ───────────────────
+    try:
+        with engine.connect() as conn:
+            fdic_rows = conn.execute(
+                sa_text(
+                    "SELECT county_fips, COALESCE(SUM(deposits), 0) AS total_fdic "
+                    "FROM fdic_deposits "
+                    "WHERE county_fips = ANY(:fips) AND year = :year "
+                    "GROUP BY county_fips"
+                ),
+                {"fips": fips_list, "year": year},
             ).mappings().all()
+            fdic_by_fips: dict[str, float] = {r["county_fips"]: float(r["total_fdic"]) for r in fdic_rows}
 
-        if rows:
-            inst_name = rows[0]["institution_name"] if rows[0]["institution_name"] else f"Charter {charter_number}"
-
-        for row in rows:
-            fips = row["county_fips"]
-            inst_val = float(row["allocated_deposits"] or 0)
-            if inst_val <= 0:
-                continue
-
-            # Get county total (all institutions) for market share denominator
-            try:
-                total_row = engine.connect().execute(
-                    sa_text("""
-                        SELECT COALESCE(SUM(deposits), 0) AS total
-                        FROM fdic_deposits
-                        WHERE county_fips = :fips AND year = :year
-                    """),
-                    {"fips": fips, "year": year},
-                ).scalar()
-                county_total = float(total_row or 0)
-            except Exception:
-                county_total = 0.0
-
-            # Add CU total for the county
-            try:
-                cu_total_row = engine.connect().execute(
-                    sa_text("""
-                        SELECT COALESCE(SUM(allocated_deposits), 0) AS total
-                        FROM cu_deposit_allocations
-                        WHERE county_fips = :fips AND period = :period
-                    """),
-                    {"fips": fips, "period": period},
-                ).scalar()
-                county_total += float(cu_total_row or 0)
-            except Exception:
-                pass
-
-            share = inst_val / county_total if county_total > 0 else 0.0
-            counties.append(HeatmapCounty(
-                county_fips  = fips,
-                market_share = round(share, 6),
-                metric_value = inst_val,
-                confidence   = row.get("confidence_level", "modeled"),
-                data_period  = str(year),
-            ))
+            cu_rows = conn.execute(
+                sa_text(
+                    "SELECT county_fips, COALESCE(SUM(allocated_deposits), 0) AS total_cu "
+                    "FROM cu_deposit_allocations "
+                    "WHERE county_fips = ANY(:fips) AND period = :period "
+                    "GROUP BY county_fips"
+                ),
+                {"fips": fips_list, "period": used_period},
+            ).mappings().all()
+            cu_by_fips: dict[str, float] = {r["county_fips"]: float(r["total_cu"]) for r in cu_rows}
 
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Heatmap query failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Heatmap county totals query failed: {exc}")
+
+    # ── Build response ─────────────────────────────────────────────────────────
+    counties: list[HeatmapCounty] = []
+    for row in alloc_rows:
+        fips     = row["county_fips"]
+        inst_val = float(row["allocated_deposits"] or 0)
+        if inst_val <= 0:
+            continue
+        county_total = fdic_by_fips.get(fips, 0.0) + cu_by_fips.get(fips, 0.0)
+        share = inst_val / county_total if county_total > 0 else 0.0
+        counties.append(HeatmapCounty(
+            county_fips  = fips,
+            market_share = round(share, 6),
+            metric_value = inst_val,
+            confidence   = row.get("confidence_level") or "modeled",
+            data_period  = str(year),
+        ))
 
     return HeatmapResponse(
         charter_number=charter_number,

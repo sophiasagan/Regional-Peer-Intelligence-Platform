@@ -196,6 +196,8 @@ def _fetch_cu_deposits_allocated(
                 )
                 return pd.DataFrame(result.mappings().all())
         except Exception:
+            # Table doesn't exist yet (run migrations/add_cu_deposit_allocations.sql
+            # then processing/compute_cu_allocations.py to populate)
             return pd.DataFrame()
 
     def _ncua_totals_by_state(state_abbrev: str) -> pd.DataFrame:

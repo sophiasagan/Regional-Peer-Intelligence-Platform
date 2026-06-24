@@ -177,6 +177,21 @@ peer_distributions = Table(
 )
 
 
+cu_deposit_allocations = Table(
+    "cu_deposit_allocations",
+    metadata,
+    Column("charter_number", Integer, nullable=False),
+    Column("period", String(8), nullable=False),        # YYYYQ#
+    Column("county_fips", String(5), nullable=False),
+    Column("institution_name", String(255)),
+    Column("allocated_deposits", BigInteger),
+    Column("confidence_level", String(20), server_default="'modeled'"),
+    Column("weight_method", String(20)),                # 'hq_county' | 'fdic_proxy' | 'equal'
+    Column("computed_at", DateTime, server_default=func.now()),
+    UniqueConstraint("charter_number", "period", "county_fips", name="uq_cu_alloc"),
+)
+
+
 def get_engine(db_url: str | None = None) -> Engine:
     url = db_url or os.environ.get("DATABASE_URL")
     if not url:
