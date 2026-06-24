@@ -329,16 +329,6 @@ def _fetch_cu_loans(
         return pd.DataFrame()
 
     # Ratio: county_deposits / total_deposits → apply to total loans
-    merged = cu_dep.merge(
-        totals_df.rename(columns={
-            "acct_018":  "inst_total_deposits",
-            "acct_025B": "inst_total_loans",
-        }),
-        left_on="charter_or_cert",
-        right_on=lambda df: "ncua:" + df["charter_number"].astype(str),
-        how="inner",
-    )
-    # Safer: merge on charter_number extracted from charter_or_cert
     cu_dep["charter_number"] = cu_dep["charter_or_cert"].str.replace("ncua:", "").astype(int)
     merged = cu_dep.merge(
         totals_df.rename(columns={"acct_018": "inst_total_deposits", "acct_025B": "inst_total_loans"}),
