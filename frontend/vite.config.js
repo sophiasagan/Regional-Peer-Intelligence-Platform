@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
+      // maplibre-gl loaded via CDN in index.html — not bundled
+      external: ['maplibre-gl'],
       output: {
-        manualChunks: {
-          maplibre: ['maplibre-gl'],
-        },
+        globals: { 'maplibre-gl': 'maplibregl' },
       },
     },
     chunkSizeWarningLimit: 2000,

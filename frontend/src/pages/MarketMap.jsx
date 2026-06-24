@@ -8,12 +8,12 @@
  * Geography: County | MSA | State | Custom Region
  */
 
-import 'maplibre-gl/dist/maplibre-gl.css';
-
 import React, {
   useState, useEffect, useRef, useCallback, useMemo,
 } from 'react';
-import maplibregl from 'maplibre-gl';
+
+// maplibre-gl loaded via CDN in index.html — available as window.maplibregl
+const maplibregl = window.maplibregl;
 import ConfidenceBadge from '../components/ConfidenceBadge';
 import CompetitorTable from '../components/CompetitorTable';
 
