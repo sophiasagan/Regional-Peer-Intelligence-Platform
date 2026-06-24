@@ -110,10 +110,12 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
     mapRef.current = map;
 
     map.on('load', () => {
+      // Plotly GeoJSON has top-level "id" (FIPS string) on each feature —
+      // MapLibre uses that natively. Do NOT set promoteId, which would override
+      // with properties.id (doesn't exist) and blank out feature.id on click events.
       map.addSource('counties', {
-        type:      'geojson',
-        data:      COUNTY_GEOJSON,
-        promoteId: 'id',
+        type: 'geojson',
+        data: COUNTY_GEOJSON,
       });
 
       map.addLayer({
@@ -155,6 +157,15 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
 
       loadedRef.current = true;
 
+      // Helper: extract FIPS from a clicked feature
+      // Plotly GeoJSON stores FIPS as the top-level "id" string on each feature.
+      // MapLibre exposes this as feature.id in click/mousemove events.
+      const getFips = (f) =>
+        String(f.id ?? f.properties?.GEO_ID ?? f.properties?.GEOID ?? f.properties?.id ?? '');
+
+      const getName = (f, fips) =>
+        f.properties?.name ?? f.properties?.NAME ?? fips;
+
       let hoveredId = null;
       map.on('mousemove', 'county-fill', (e) => {
         if (e.features.length > 0) {
@@ -162,7 +173,9 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
             map.setFeatureState({ source: 'counties', id: hoveredId }, { hover: false });
           }
           hoveredId = e.features[0].id;
-          map.setFeatureState({ source: 'counties', id: hoveredId }, { hover: true });
+          if (hoveredId != null) {
+            map.setFeatureState({ source: 'counties', id: hoveredId }, { hover: true });
+          }
         }
       });
       map.on('mouseleave', 'county-fill', () => {
@@ -175,14 +188,19 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
       let selectedId = null;
       map.on('click', 'county-fill', (e) => {
         if (!e.features.length) return;
-        const fips    = String(e.features[0].id ?? e.features[0].properties?.id ?? '');
         const feature = e.features[0];
+        const fips    = getFips(feature);
+        const name    = getName(feature, fips);
+
         if (selectedId !== null) {
           map.setFeatureState({ source: 'counties', id: selectedId }, { selected: false });
         }
         selectedId = feature.id;
-        map.setFeatureState({ source: 'counties', id: selectedId }, { selected: true });
-        onCountyClick({ fips, name: feature.properties?.name ?? fips });
+        if (selectedId != null) {
+          map.setFeatureState({ source: 'counties', id: selectedId }, { selected: true });
+        }
+
+        if (fips) onCountyClick({ fips, name: name || fips });
       });
 
       map.on('mouseenter', 'county-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
