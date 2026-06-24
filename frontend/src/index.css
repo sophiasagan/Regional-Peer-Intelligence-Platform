@@ -533,3 +533,66 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .ew-stat + .ew-stat { border-left: 1px solid var(--border); }
 .ew-stat-label  { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
 .ew-stat-value  { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ── Market Map ──────────────────────────────────────────────────────────────── */
+.market-map-page    { height: calc(100vh - 52px); overflow: hidden; }
+.market-map-layout  { display: flex; height: 100%; }
+
+/* Map column — takes 60% width, full height, position:relative for overlays */
+.map-column         { position: relative; flex: 0 0 60%; height: 100%; }
+
+/* The MapLibre canvas must fill the container — CRITICAL: must have explicit height */
+.mapbox-container   { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Controls float over the map, top-left */
+.map-controls-overlay {
+  position: absolute; top: 12px; left: 12px; z-index: 10;
+  display: flex; flex-direction: column; gap: 6px;
+  pointer-events: none;   /* let clicks through to map */
+}
+.map-controls-overlay > * { pointer-events: auto; }
+
+/* Geography selector */
+.geo-selector       { background: #fff; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.15); display: flex; flex-direction: column; gap: 6px; min-width: 280px; }
+.geo-type-tabs      { display: flex; gap: 2px; }
+.geo-tab            { flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid var(--border); background: #fff; border-radius: 4px; cursor: pointer; color: var(--text-muted); }
+.geo-tab--active    { background: #1A237E; color: #fff; border-color: #1A237E; }
+.geo-id-input       { border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 100%; }
+
+/* Period selector */
+.period-selector-panel { background: #fff; border-radius: 8px; padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.period-row         { display: flex; align-items: center; gap: 8px; font-size: 12px; flex-wrap: wrap; }
+.period-row select  { border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+.compare-toggle     { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* Metric tab bar */
+.map-metric-bar     { background: #fff; border-radius: 8px; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.15); display: flex; gap: 2px; }
+.map-metric-btn     { flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid transparent; background: transparent; border-radius: 4px; cursor: pointer; color: var(--text-muted); white-space: nowrap; }
+.map-metric-btn--active { background: #1A237E; color: #fff; }
+
+/* Color legend — bottom-left */
+.color-legend       { position: absolute; bottom: 32px; left: 12px; z-index: 10; background: #fff; border-radius: 8px; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,.15); font-size: 12px; }
+.legend-title       { font-weight: 700; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.legend-scale       { display: flex; flex-direction: column; gap: 4px; }
+.legend-row         { display: flex; align-items: center; gap: 6px; }
+.legend-swatch      { width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.08); }
+.legend-label       { font-size: 11px; color: var(--text); }
+
+/* Selected county label — bottom-center */
+.selected-county-label {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 10; background: #fff; border-radius: 20px; padding: 6px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2); font-size: 12px; white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+.clear-btn { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-muted); line-height: 1; padding: 0; }
+.clear-btn:hover { color: var(--color-red); }
+
+/* Right panel */
+.map-right-panel    { flex: 1; height: 100%; overflow-y: auto; border-left: 1px solid var(--border); background: #fff; padding: 16px; }
+.panel-geo-header   { margin-bottom: 12px; }
+.panel-title        { font-size: 16px; font-weight: 700; }
+.panel-fips         { font-size: 11px; color: var(--text-muted); }
+.map-empty-hint     { color: var(--text-muted); font-size: 13px; text-align: center; margin-top: 60px; line-height: 1.6; }
+.compare-panel      { margin-top: 24px; border-top: 2px solid var(--border); padding-top: 16px; }
+.compare-header     { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 8px; }
