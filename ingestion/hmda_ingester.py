@@ -1,6 +1,6 @@
 """HMDA loan origination data ingester — annual.
 
-Downloads HMDA LAR (Loan Application Register) from CFPB's S3 snapshot,
+Downloads HMDA LAR (Loan Application Register) from CFPB/FFIEC snapshot,
 filters to originated home-purchase and refinance loans, aggregates by
 (respondent_id, county_fips, loan_purpose), and upserts into hmda_originations.
 
@@ -15,6 +15,15 @@ All institution types are included so market share shows the full competitive se
 Usage:
     python -m ingestion.hmda_ingester --year 2023
     python -m ingestion.hmda_ingester --year 2022
+
+If automatic download fails (CFPB moves their URLs periodically):
+  1. Visit https://ffiec.cfpb.gov/data-publication/snapshot-national-loan-level-dataset/
+  2. Download the {year} nationwide LAR zip
+  3. Save it to data/raw/hmda_lar_{year}.zip
+  4. Re-run — the ingester will skip the download and use the local file
+
+Or pass the zip/csv directly:
+    python -m ingestion.hmda_ingester --year 2023 --file /path/to/hmda_lar_2023.zip
 """
 
 from __future__ import annotations
@@ -32,15 +41,26 @@ from db import get_engine, hmda_originations
 
 logger = logging.getLogger(__name__)
 
-# CFPB HMDA bulk snapshot — try modern URL first, fall back to legacy
+# CFPB/FFIEC HMDA bulk snapshot URLs — tried in order until one returns 200.
+# CFPB has moved these files several times; add new patterns at the top.
 HMDA_URL_TEMPLATES = [
-    # Post-2020 format
+    # FFIEC S3 — current format (2020+): year-prefixed filename
+    "https://s3.amazonaws.com/cfpb-hmda-public/prod/snapshot-data/"
+    "{year}/nationwide/{year}_public_lar_csv.zip",
+    # FFIEC S3 — alternate year-prefixed path
+    "https://s3.amazonaws.com/cfpb-hmda-public/prod/snapshot-data/"
+    "{year}/{year}_public_lar_csv.zip",
+    # Legacy combined_msa-md path (pre-2020)
     "https://s3.amazonaws.com/cfpb-hmda-public/prod/snapshot-data/"
     "{year}/nationwide/combined_msa-md.zip",
-    # Legacy pre-2020 format (same path, kept as fallback)
+    # FFIEC collections path
     "https://s3.amazonaws.com/cfpb-hmda-public/prod/collections/hmda/"
     "{year}/nationwide/combined_lar_{year}.zip",
 ]
+
+MANUAL_DOWNLOAD_PAGE = (
+    "https://ffiec.cfpb.gov/data-publication/snapshot-national-loan-level-dataset/"
+)
 
 ACTION_ORIGINATED = 1
 
@@ -86,38 +106,58 @@ def _detect_schema(header_cols: list[str]) -> tuple[dict, bool]:
 
 # ── Download ──────────────────────────────────────────────────────────────────
 
-def fetch_lar(year: int, dest_dir: str = "data/raw") -> str:
-    """Download HMDA LAR ZIP, extract, return path to the LAR CSV/TXT."""
+def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = None) -> str:
+    """Download (or locate) HMDA LAR ZIP and extract; return path to the LAR CSV/TXT.
+
+    If local_file is provided (--file CLI arg), skip download and use that path directly.
+    If data/raw/hmda_lar_{year}.zip already exists, skip download (cached).
+    """
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
-    zip_path = dest / f"hmda_lar_{year}.zip"
 
-    if not zip_path.exists():
-        downloaded = False
-        for url_template in HMDA_URL_TEMPLATES:
-            url = url_template.format(year=year)
-            logger.info("Trying HMDA LAR %d from %s", year, url)
-            try:
-                with requests.get(url, stream=True, timeout=600) as resp:
-                    if resp.status_code == 200:
-                        with open(zip_path, "wb") as f:
-                            for chunk in resp.iter_content(chunk_size=1024 * 1024):
-                                f.write(chunk)
-                        logger.info("Saved %.1f MB → %s", zip_path.stat().st_size / 1e6, zip_path)
-                        downloaded = True
-                        break
-                    logger.warning("HTTP %d from %s", resp.status_code, url)
-            except Exception as exc:
-                logger.warning("Download failed from %s: %s", url, exc)
-
-        if not downloaded:
-            raise RuntimeError(
-                f"Could not download HMDA LAR for {year}. "
-                "Check CFPB's data publication page: "
-                "https://ffiec.cfpb.gov/data-publication/snapshot-national-loan-level-dataset/"
-            )
+    # ── Locate zip ────────────────────────────────────────────────────────────
+    if local_file:
+        zip_path = Path(local_file)
+        if not zip_path.exists():
+            raise FileNotFoundError(f"--file path does not exist: {local_file}")
+        logger.info("Using provided file: %s", zip_path)
+        # If it's already a CSV/TXT (not a zip), skip extraction
+        if zip_path.suffix.lower() in (".csv", ".txt"):
+            return str(zip_path)
     else:
-        logger.info("Using cached %s", zip_path)
+        zip_path = dest / f"hmda_lar_{year}.zip"
+
+        if not zip_path.exists():
+            downloaded = False
+            for url_template in HMDA_URL_TEMPLATES:
+                url = url_template.format(year=year)
+                logger.info("Trying HMDA LAR %d from %s", year, url)
+                try:
+                    with requests.get(url, stream=True, timeout=600) as resp:
+                        if resp.status_code == 200:
+                            with open(zip_path, "wb") as f:
+                                for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                                    f.write(chunk)
+                            logger.info(
+                                "Saved %.1f MB → %s", zip_path.stat().st_size / 1e6, zip_path
+                            )
+                            downloaded = True
+                            break
+                        logger.warning("HTTP %d from %s", resp.status_code, url)
+                except Exception as exc:
+                    logger.warning("Download failed from %s: %s", url, exc)
+
+            if not downloaded:
+                raise RuntimeError(
+                    f"Could not download HMDA LAR for {year} from any known URL.\n"
+                    f"Manual download instructions:\n"
+                    f"  1. Visit {MANUAL_DOWNLOAD_PAGE}\n"
+                    f"  2. Download the {year} nationwide LAR zip\n"
+                    f"  3. Save it to {zip_path} OR pass with --file /path/to/file.zip\n"
+                    f"  4. Re-run this command"
+                )
+        else:
+            logger.info("Using cached %s", zip_path)
 
     extract_dir = dest / f"hmda_lar_{year}"
     extract_dir.mkdir(exist_ok=True)
@@ -249,8 +289,8 @@ def upsert(df: pd.DataFrame, year: int, db_url: str | None = None) -> int:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def ingest(year: int, db_url: str | None = None) -> None:
-    path = fetch_lar(year)
+def ingest(year: int, db_url: str | None = None, local_file: str | None = None) -> None:
+    path = fetch_lar(year, local_file=local_file)
     df   = parse_lar(path, year)
     df   = aggregate_by_county(df)
     upsert(df, year, db_url)
@@ -260,9 +300,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest HMDA LAR originations")
     parser.add_argument("--year", type=int, required=True, help="e.g. 2023")
     parser.add_argument("--db-url", default=None)
+    parser.add_argument(
+        "--file",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a pre-downloaded HMDA LAR zip or CSV. "
+            "Skips automatic download. "
+            f"Download from: {MANUAL_DOWNLOAD_PAGE}"
+        ),
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    ingest(args.year, args.db_url)
+    ingest(args.year, args.db_url, local_file=args.file)
 
 
 if __name__ == "__main__":
