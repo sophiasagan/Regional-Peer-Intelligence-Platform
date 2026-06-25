@@ -435,9 +435,12 @@ def _fetch_hmda_originations(
 ) -> pd.DataFrame:
     """Load HMDA mortgage origination volumes (all institution types, measured).
 
+    HMDA data lags ~18 months — falls back up to 2 prior years when the
+    requested year has no data yet.
+
     Returns: charter_or_cert, institution_name, metric_value, confidence, data_period
     """
-    def _query_county(fips: str) -> pd.DataFrame:
+    def _query_county(fips: str, y: int) -> pd.DataFrame:
         with engine.connect() as conn:
             result = conn.execute(
                 select(
@@ -446,12 +449,12 @@ def _fetch_hmda_originations(
                     hmda_originations.c.origination_volume,
                 ).where(
                     hmda_originations.c.county_fips == fips,
-                    hmda_originations.c.year == year,
+                    hmda_originations.c.year == y,
                 )
             )
             return pd.DataFrame(result.mappings().all())
 
-    def _query_state(state_abbrev: str) -> pd.DataFrame:
+    def _query_state(state_abbrev: str, y: int) -> pd.DataFrame:
         with engine.connect() as conn:
             result = conn.execute(
                 select(
@@ -460,25 +463,34 @@ def _fetch_hmda_originations(
                     hmda_originations.c.origination_volume,
                 ).where(
                     hmda_originations.c.state_code == state_abbrev,
-                    hmda_originations.c.year == year,
+                    hmda_originations.c.year == y,
                 )
             )
             return pd.DataFrame(result.mappings().all())
 
-    if geography_type == "county":
-        raw = _query_county(geography_id)
-    elif geography_type == "state":
-        raw = _query_state(geography_id)
-    elif geography_type in ("msa", "custom_region"):
-        counties = (
-            _resolve_msa_counties(geography_id, engine)
-            if geography_type == "msa"
-            else _resolve_custom_region_counties(geography_id, engine)
-        )
-        frames = [_query_county(c) for c in counties]
-        raw = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-    else:
-        raise ValueError(f"Unsupported geography_type: {geography_type}")
+    def _fetch_for_year(y: int) -> pd.DataFrame:
+        if geography_type == "county":
+            return _query_county(geography_id, y)
+        elif geography_type == "state":
+            return _query_state(geography_id, y)
+        elif geography_type in ("msa", "custom_region"):
+            counties = (
+                _resolve_msa_counties(geography_id, engine)
+                if geography_type == "msa"
+                else _resolve_custom_region_counties(geography_id, engine)
+            )
+            frames = [_query_county(c, y) for c in counties]
+            return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        else:
+            raise ValueError(f"Unsupported geography_type: {geography_type}")
+
+    actual_year = year
+    raw = pd.DataFrame()
+    for try_year in [year, year - 1, year - 2]:
+        raw = _fetch_for_year(try_year)
+        if not raw.empty:
+            actual_year = try_year
+            break
 
     if raw.empty:
         return raw
@@ -497,7 +509,7 @@ def _fetch_hmda_originations(
     agg["institution_type"] = "bank"    # HMDA respondent_id doesn't distinguish CU vs bank at this stage
     agg["metric_value"]     = agg["origination_volume"]
     agg["confidence"]       = "measured"
-    agg["data_period"]      = str(year)
+    agg["data_period"]      = str(actual_year)
 
     # Enrich institution names from HMDA respondent crosswalk if available
     try:
