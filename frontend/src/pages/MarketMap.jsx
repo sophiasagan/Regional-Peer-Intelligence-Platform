@@ -251,7 +251,17 @@ function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange }) {
   );
 }
 
-const QUICK_PERIODS = ['2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1'];
+function buildPeriodList(latest, count = 16) {
+  let year = parseInt(latest.slice(0, 4), 10);
+  let q    = parseInt(latest[5], 10);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(`${year}Q${q}`);
+    if (--q === 0) { q = 4; year--; }
+  }
+  return out;
+}
+const QUICK_PERIODS = buildPeriodList('2026Q1', 16);
 
 function PeriodSelector({ period, onPeriodChange, compareMode, comparePeriod, onCompareModeChange, onComparePeriodChange }) {
   return (
