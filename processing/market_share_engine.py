@@ -682,16 +682,6 @@ def calculate_market_share(
         prior_yoy_map = prior_p_map   # annual: prior period IS prior year
 
     # ── Attach share changes ───────────────────────────────────────────────────
-    current["share_change_prior_period"] = current["charter_or_cert"].map(
-        lambda c: (current.set_index("charter_or_cert").loc[c, "market_share"] - prior_p_map[c])
-        if c in prior_p_map else None
-    )
-    current["share_change_yoy"] = current["charter_or_cert"].map(
-        lambda c: (current.set_index("charter_or_cert").loc[c, "market_share"] - prior_yoy_map[c])
-        if c in prior_yoy_map else None
-    )
-
-    # Simpler lambda-free version (avoid repeated set_index):
     share_now = current.set_index("charter_or_cert")["market_share"]
     current["share_change_prior_period"] = current["charter_or_cert"].map(
         lambda c: float(share_now[c]) - float(prior_p_map[c]) if c in prior_p_map else None

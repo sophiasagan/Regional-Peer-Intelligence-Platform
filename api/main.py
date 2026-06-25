@@ -94,7 +94,10 @@ async def tenant_middleware(request: Request, call_next):
 
     # Auth-exempt paths — pass through, attach CORS to response
     if any(path == s or path.startswith(s) for s in SKIP_AUTH):
-        resp = await call_next(request)
+        try:
+            resp = await call_next(request)
+        except Exception:
+            resp = Response(status_code=500, content=b"Internal Server Error")
         resp.headers["Access-Control-Allow-Origin"] = "*"
         return resp
 
@@ -112,7 +115,10 @@ async def tenant_middleware(request: Request, call_next):
     else:
         request.state.tenant_id = "anonymous"
 
-    resp = await call_next(request)
+    try:
+        resp = await call_next(request)
+    except Exception:
+        resp = Response(status_code=500, content=b"Internal Server Error")
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
 
