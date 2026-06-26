@@ -166,17 +166,31 @@ def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = No
         logger.info("File is not a zip archive — treating as plain CSV/TXT: %s", zip_path)
         return str(zip_path)
 
+    extract_dir = dest / f"hmda_lar_{year}"
+    extract_dir.mkdir(exist_ok=True)
+
     with zf:
-        candidates = [m for m in zf.infolist() if m.filename.lower().endswith((".txt", ".csv"))]
-        if not candidates:
-            raise RuntimeError(f"No CSV/TXT found inside {zip_path}")
-        target = max(candidates, key=lambda m: m.file_size)
-        extract_dir = dest / f"hmda_lar_{year}"
-        extract_dir.mkdir(exist_ok=True)
-        zf.extract(target, extract_dir)
-        extracted = str(extract_dir / target.filename)
-        logger.info("Extracted %s (%.1f MB)", target.filename, target.file_size / 1e6)
-        return extracted
+        members = zf.infolist()
+        logger.info("Zip contains %d entries: %s", len(members), [m.filename for m in members[:5]])
+        # extractall is more reliable than extract() for ZIP64 streaming archives
+        # (local header sizes may be 0; extractall reads until data descriptor)
+        zf.extractall(extract_dir)
+
+    # Find the largest CSV/TXT file written to disk (don't trust zip header file_size)
+    found: list[Path] = sorted(
+        [f for ext in ("*.csv", "*.txt", "*.CSV", "*.TXT")
+         for f in extract_dir.rglob(ext)],
+        key=lambda f: f.stat().st_size,
+        reverse=True,
+    )
+    if not found:
+        raise RuntimeError(
+            f"No CSV/TXT found after extracting {zip_path} into {extract_dir}. "
+            f"Files present: {list(extract_dir.rglob('*'))}"
+        )
+    extracted = str(found[0])
+    logger.info("Using extracted file: %s (%.1f MB)", extracted, found[0].stat().st_size / 1e6)
+    return extracted
 
 
 # ── Parse ─────────────────────────────────────────────────────────────────────
