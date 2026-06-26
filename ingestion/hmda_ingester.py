@@ -209,6 +209,7 @@ def parse_lar(path: str, year: int) -> pd.DataFrame:
         encoding="latin-1",
         engine="python",    # C parser overflows on some HMDA rows; Python engine handles them
         on_bad_lines="warn",
+        compression=None,   # file may have .zip extension but be plain CSV
     )
     # Normalise column names to lowercase for consistent mapping
     df.columns = [c.lower() for c in df.columns]
