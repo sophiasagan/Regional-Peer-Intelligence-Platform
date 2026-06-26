@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -172,25 +173,29 @@ def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = No
     with zf:
         members = zf.infolist()
         logger.info("Zip contains %d entries: %s", len(members), [m.filename for m in members[:5]])
-        # extractall is more reliable than extract() for ZIP64 streaming archives
-        # (local header sizes may be 0; extractall reads until data descriptor)
-        zf.extractall(extract_dir)
 
-    # Find the largest CSV/TXT file written to disk (don't trust zip header file_size)
-    found: list[Path] = sorted(
-        [f for ext in ("*.csv", "*.txt", "*.CSV", "*.TXT")
-         for f in extract_dir.rglob(ext)],
-        key=lambda f: f.stat().st_size,
-        reverse=True,
-    )
-    if not found:
-        raise RuntimeError(
-            f"No CSV/TXT found after extracting {zip_path} into {extract_dir}. "
-            f"Files present: {list(extract_dir.rglob('*'))}"
+        # Pick the member with the largest compressed size — file_size is 0 in
+        # streaming ZIP64 local headers, but compress_size is in the central directory.
+        target = max(members, key=lambda m: m.compress_size)
+        logger.info(
+            "Extracting member: %s (compressed %.1f MB)", target.filename, target.compress_size / 1e6
         )
-    extracted = str(found[0])
-    logger.info("Using extracted file: %s (%.1f MB)", extracted, found[0].stat().st_size / 1e6)
-    return extracted
+        # Use zf.open() + shutil.copyfileobj instead of extract()/extractall():
+        # Python's extract() silently writes raw zip bytes for streaming ZIP64 archives.
+        # zf.open() decompresses the stream correctly.
+        out_path = extract_dir / Path(target.filename).name   # flatten any subdirectory
+        out_path.unlink(missing_ok=True)                      # always overwrite — avoid stale corrupted file
+        with zf.open(target) as src, open(out_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+    size_mb = out_path.stat().st_size / 1e6
+    logger.info("Extracted %s (%.1f MB)", out_path, size_mb)
+    if size_mb < 1:
+        raise RuntimeError(
+            f"Extracted file is suspiciously small ({size_mb:.1f} MB): {out_path}. "
+            "The zip may be corrupted or the wrong member was selected."
+        )
+    return str(out_path)
 
 
 # ── Parse ─────────────────────────────────────────────────────────────────────
