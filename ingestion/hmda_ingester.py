@@ -207,7 +207,7 @@ def parse_lar(path: str, year: int) -> pd.DataFrame:
         usecols=lambda c: c.lower() in {s.lower() for s in src_cols},
         dtype=str,
         encoding="latin-1",
-        low_memory=False,
+        engine="python",    # C parser overflows on some HMDA rows; Python engine handles them
         on_bad_lines="warn",
     )
     # Normalise column names to lowercase for consistent mapping
