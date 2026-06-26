@@ -159,13 +159,20 @@ def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = No
         else:
             logger.info("Using cached %s", zip_path)
 
-    extract_dir = dest / f"hmda_lar_{year}"
-    extract_dir.mkdir(exist_ok=True)
-    with zipfile.ZipFile(zip_path) as zf:
+    # CFPB sometimes serves CSV content with a .zip extension — detect and handle
+    try:
+        zf = zipfile.ZipFile(zip_path)
+    except zipfile.BadZipFile:
+        logger.info("File is not a zip archive — treating as plain CSV/TXT: %s", zip_path)
+        return str(zip_path)
+
+    with zf:
         candidates = [m for m in zf.infolist() if m.filename.lower().endswith((".txt", ".csv"))]
         if not candidates:
             raise RuntimeError(f"No CSV/TXT found inside {zip_path}")
         target = max(candidates, key=lambda m: m.file_size)
+        extract_dir = dest / f"hmda_lar_{year}"
+        extract_dir.mkdir(exist_ok=True)
         zf.extract(target, extract_dir)
         extracted = str(extract_dir / target.filename)
         logger.info("Extracted %s (%.1f MB)", target.filename, target.file_size / 1e6)
