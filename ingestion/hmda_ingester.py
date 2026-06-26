@@ -198,22 +198,31 @@ def parse_lar(path: str, year: int) -> pd.DataFrame:
 
     header_cols = [c.strip().lower() for c in header_line.split(sep)]
     field_map, is_post2018 = _detect_schema(header_cols)
-    logger.info("Detected %s HMDA schema", "post-2018" if is_post2018 else "pre-2018")
+    logger.info(
+        "Detected %s HMDA schema; first 10 columns: %s",
+        "post-2018" if is_post2018 else "pre-2018",
+        header_cols[:10],
+    )
 
-    src_cols = list(field_map.keys())
+    # Read ALL columns — usecols lambda can silently drop needed columns if the
+    # file has BOM bytes, extra spaces, or unexpected casing in column names.
     df = pd.read_csv(
         path,
         sep=sep,
-        usecols=lambda c: c.lower() in {s.lower() for s in src_cols},
         dtype=str,
         encoding="latin-1",
-        engine="python",    # C parser overflows on some HMDA rows; Python engine handles them
+        engine="python",    # C parser overflows on some HMDA rows
         on_bad_lines="warn",
         compression=None,   # file may have .zip extension but be plain CSV
     )
-    # Normalise column names to lowercase for consistent mapping
-    df.columns = [c.lower() for c in df.columns]
+    # Normalise column names: strip whitespace + lowercase, then apply field map
+    df.columns = [c.strip().lower() for c in df.columns]
     df = df.rename(columns={k.lower(): v for k, v in field_map.items()})
+    logger.info("Columns after rename: %s", df.columns.tolist())
+
+    # Keep only the columns we need; drop everything else to free memory
+    keep = [v for v in field_map.values() if v in df.columns]
+    df = df[keep]
 
     for col in ("year", "action_taken", "loan_purpose", "loan_amount"):
         if col in df.columns:
