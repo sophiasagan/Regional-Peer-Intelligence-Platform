@@ -86,6 +86,10 @@ audio/
 .dockerignore
 docker-compose.override.yml
 
+# ── Data files — never commit raw/processed data to git ──────────────────────
+data/raw/
+data/processed/
+
 # ── Misc ─────────────────────────────────────────────────────────────────────
 *.bak
 *.tmp
