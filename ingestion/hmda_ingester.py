@@ -105,6 +105,73 @@ def _detect_schema(header_cols: list[str]) -> tuple[dict, bool]:
     return _FIELDS_PRE2018, False
 
 
+# ── Extraction helpers ────────────────────────────────────────────────────────
+
+_ZIP_MAGIC = b"PK\x03\x04"
+
+
+def _extract_csv(zip_path: Path, extract_dir: Path, max_depth: int = 3) -> Path:
+    """Extract the largest member from a zip, recursing if it is itself a zip.
+
+    Checks magic bytes (PK\\x03\\x04) rather than file extension so that
+    zip-in-zip structures (CFPB sometimes ships outer.zip → inner.zip → data.csv)
+    are fully unwrapped regardless of what the extracted file is named.
+    """
+    # Verify it's actually a zip before opening
+    try:
+        with open(zip_path, "rb") as f:
+            magic = f.read(4)
+    except OSError as exc:
+        raise RuntimeError(f"Cannot read {zip_path}: {exc}") from exc
+
+    if magic != _ZIP_MAGIC:
+        logger.info("Not a zip (magic=%r) — using as-is: %s", magic, zip_path)
+        return zip_path
+
+    try:
+        zf = zipfile.ZipFile(zip_path)
+    except zipfile.BadZipFile:
+        logger.info("BadZipFile — treating as plain file: %s", zip_path)
+        return zip_path
+
+    with zf:
+        members = zf.infolist()
+        logger.info("zip %s: %d entries", zip_path.name, len(members))
+        for m in members[:10]:
+            logger.info(
+                "  %-50s  compress=%d  uncompressed=%d  method=%d",
+                m.filename, m.compress_size, m.file_size, m.compress_type,
+            )
+
+        # Largest by compress_size — correct even for ZIP64 streaming archives
+        # because Python reads sizes from the central directory, not local headers.
+        target = max(members, key=lambda m: m.compress_size)
+        logger.info("Selected: %s (%.1f MB compressed)", target.filename, target.compress_size / 1e6)
+
+        out_path = extract_dir / Path(target.filename).name   # flatten subdirectory
+        out_path.unlink(missing_ok=True)                      # remove any stale file
+        with zf.open(target) as src, open(out_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+    out_size = out_path.stat().st_size
+    logger.info("Extracted → %s (%.1f MB)", out_path.name, out_size / 1e6)
+
+    # Peek at the extracted file — if it's another zip, recurse
+    with open(out_path, "rb") as f:
+        inner_magic = f.read(4)
+
+    if inner_magic == _ZIP_MAGIC:
+        if max_depth <= 1:
+            raise RuntimeError(
+                f"Nested zip too deep (max_depth reached) at {out_path}. "
+                "Inspect the file manually."
+            )
+        logger.info("Extracted file is itself a zip — recursing: %s", out_path.name)
+        return _extract_csv(out_path, extract_dir, max_depth=max_depth - 1)
+
+    return out_path
+
+
 # ── Download ──────────────────────────────────────────────────────────────────
 
 def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = None) -> str:
@@ -160,42 +227,21 @@ def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = No
         else:
             logger.info("Using cached %s", zip_path)
 
-    # CFPB sometimes serves CSV content with a .zip extension — detect and handle
-    try:
-        zf = zipfile.ZipFile(zip_path)
-    except zipfile.BadZipFile:
-        logger.info("File is not a zip archive — treating as plain CSV/TXT: %s", zip_path)
-        return str(zip_path)
-
     extract_dir = dest / f"hmda_lar_{year}"
     extract_dir.mkdir(exist_ok=True)
 
-    with zf:
-        members = zf.infolist()
-        logger.info("Zip contains %d entries: %s", len(members), [m.filename for m in members[:5]])
+    # Recursively extract until we reach actual CSV/text content.
+    # CFPB sometimes ships zip-in-zip (outer zip → inner zip → CSV).
+    csv_path = _extract_csv(zip_path, extract_dir, max_depth=3)
 
-        # Pick the member with the largest compressed size — file_size is 0 in
-        # streaming ZIP64 local headers, but compress_size is in the central directory.
-        target = max(members, key=lambda m: m.compress_size)
-        logger.info(
-            "Extracting member: %s (compressed %.1f MB)", target.filename, target.compress_size / 1e6
-        )
-        # Use zf.open() + shutil.copyfileobj instead of extract()/extractall():
-        # Python's extract() silently writes raw zip bytes for streaming ZIP64 archives.
-        # zf.open() decompresses the stream correctly.
-        out_path = extract_dir / Path(target.filename).name   # flatten any subdirectory
-        out_path.unlink(missing_ok=True)                      # always overwrite — avoid stale corrupted file
-        with zf.open(target) as src, open(out_path, "wb") as dst:
-            shutil.copyfileobj(src, dst)
-
-    size_mb = out_path.stat().st_size / 1e6
-    logger.info("Extracted %s (%.1f MB)", out_path, size_mb)
+    size_mb = csv_path.stat().st_size / 1e6
+    logger.info("Final file: %s (%.1f MB)", csv_path, size_mb)
     if size_mb < 1:
         raise RuntimeError(
-            f"Extracted file is suspiciously small ({size_mb:.1f} MB): {out_path}. "
+            f"Extracted file is suspiciously small ({size_mb:.1f} MB): {csv_path}. "
             "The zip may be corrupted or the wrong member was selected."
         )
-    return str(out_path)
+    return str(csv_path)
 
 
 # ── Parse ─────────────────────────────────────────────────────────────────────
