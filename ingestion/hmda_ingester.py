@@ -430,6 +430,11 @@ def parse_lar(path_or_stream: "str | io.TextIOWrapper", year: int) -> pd.DataFra
 
         chunk = chunk[mask].copy()
 
+        # Convert to int now that NaNs are gone — avoids float64 reaching the DB
+        for col in ("action_taken", "loan_purpose"):
+            if col in chunk.columns:
+                chunk[col] = chunk[col].astype(int)
+
         if "county_fips" in chunk.columns:
             chunk = chunk[chunk["county_fips"].astype(str).str.len() == 5]
             chunk = chunk[chunk["county_fips"].astype(str).str.isdigit()]
@@ -485,15 +490,21 @@ def upsert(df: pd.DataFrame, year: int, db_url: str | None = None) -> int:
     store_df   = df[[c for c in df.columns if c in table_cols]].copy()
 
     def _pyval(v: object) -> object:
-        """Convert numpy/pandas scalars to Python natives for psycopg2."""
+        """Convert numpy/pandas scalars to Python natives for psycopg2.
+
+        psycopg2 cannot adapt numpy.int64, numpy.float64, or pd.NA directly.
+        Whole-number floats (e.g. loan_purpose=31.0) must become Python int
+        so PostgreSQL integer columns don't reject them.
+        """
         if v is None or v is pd.NA:
             return None
         if isinstance(v, float) and v != v:  # NaN
             return None
-        if isinstance(v, np.integer):
+        if isinstance(v, (np.integer, int)):
             return int(v)
-        if isinstance(v, np.floating):
-            return float(v)
+        if isinstance(v, (np.floating, float)):
+            int_v = int(v)
+            return int_v if v == int_v else float(v)
         return v
 
     records = [
@@ -510,10 +521,17 @@ def upsert(df: pd.DataFrame, year: int, db_url: str | None = None) -> int:
             batch = records[i : i + 500]
             stmt  = pg_insert(hmda_originations).values(batch)
             stmt  = stmt.on_conflict_do_update(
-                index_elements=list(pk_cols),
+                index_elements=sorted(pk_cols),  # sorted for deterministic order
                 set_={col: stmt.excluded[col] for col in update_cols},
             )
-            total += conn.execute(stmt).rowcount
+            try:
+                total += conn.execute(stmt).rowcount
+            except Exception as exc:
+                # Log the raw DBAPI message before SQLAlchemy buries it under params
+                raw = getattr(exc, "orig", exc)
+                logger.error("Upsert batch %d-%d failed — %s: %s",
+                             i, i + len(batch), type(raw).__name__, raw)
+                raise
 
     logger.info("Upserted %d HMDA origination rows for %d", total, year)
     return total
