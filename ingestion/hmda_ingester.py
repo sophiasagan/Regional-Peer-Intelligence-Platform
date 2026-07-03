@@ -36,6 +36,7 @@ import zipfile
 import zlib
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -468,7 +469,8 @@ def aggregate_by_county(df: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index()
     )
-    agg["origination_volume"] = pd.to_numeric(agg["origination_volume"], errors="coerce").astype("Int64")
+    agg["origination_count"]  = agg["origination_count"].fillna(0).astype(int)
+    agg["origination_volume"] = pd.to_numeric(agg["origination_volume"], errors="coerce").fillna(0).astype(int)
     return agg
 
 
@@ -481,7 +483,23 @@ def upsert(df: pd.DataFrame, year: int, db_url: str | None = None) -> int:
 
     table_cols = {c.name for c in hmda_originations.c}
     store_df   = df[[c for c in df.columns if c in table_cols]].copy()
-    records    = store_df.where(pd.notna(store_df), other=None).to_dict("records")
+
+    def _pyval(v: object) -> object:
+        """Convert numpy/pandas scalars to Python natives for psycopg2."""
+        if v is None or v is pd.NA:
+            return None
+        if isinstance(v, float) and v != v:  # NaN
+            return None
+        if isinstance(v, np.integer):
+            return int(v)
+        if isinstance(v, np.floating):
+            return float(v)
+        return v
+
+    records = [
+        {k: _pyval(v) for k, v in row.items()}
+        for row in store_df.where(pd.notna(store_df), other=None).to_dict("records")
+    ]
 
     pk_cols    = {"year", "respondent_id", "county_fips", "loan_purpose"}
     update_cols = [c for c in table_cols if c not in pk_cols and c != "ingested_at"]
