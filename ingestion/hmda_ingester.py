@@ -463,15 +463,26 @@ def parse_lar(path_or_stream: "str | io.TextIOWrapper", year: int) -> pd.DataFra
 # ── Aggregate ─────────────────────────────────────────────────────────────────
 
 def aggregate_by_county(df: pd.DataFrame) -> pd.DataFrame:
-    """Summarise origination count and volume by respondent_id × county_fips × loan_purpose."""
-    group_cols = [c for c in ["respondent_id", "state_code", "county_fips", "loan_purpose"]
+    """Summarise origination count and volume by respondent_id × county_fips × loan_purpose.
+
+    state_code is intentionally excluded from the groupby key: it is NOT part of
+    the DB primary key (year, respondent_id, county_fips, loan_purpose), and
+    including it causes CardinalityViolation when the same (respondent, county,
+    purpose) appears with different state_code values in the same batch.
+    """
+    group_cols = [c for c in ["respondent_id", "county_fips", "loan_purpose"]
                   if c in df.columns]
+
+    agg_spec: dict = dict(
+        origination_count=("loan_amount", "count"),
+        origination_volume=("loan_amount", "sum"),
+    )
+    if "state_code" in df.columns:
+        agg_spec["state_code"] = ("state_code", "first")
+
     agg = (
         df.groupby(group_cols, dropna=False)
-        .agg(
-            origination_count=("loan_amount", "count"),
-            origination_volume=("loan_amount", "sum"),
-        )
+        .agg(**agg_spec)
         .reset_index()
     )
     agg["origination_count"]  = agg["origination_count"].fillna(0).astype(int)
