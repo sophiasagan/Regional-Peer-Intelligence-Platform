@@ -525,8 +525,7 @@ def _fetch_hmda_originations(
             crosswalk = pd.DataFrame(result.mappings().all())
         if not crosswalk.empty:
             agg = agg.merge(crosswalk, on="respondent_id", how="left", suffixes=("", "_cw"))
-            mask = crosswalk.set_index("respondent_id")["respondent_name"]
-            agg["institution_name"] = agg["respondent_id"].map(mask).fillna(agg["institution_name"])
+            agg["institution_name"] = agg["respondent_name"].fillna(agg["institution_name"])
             agg["institution_type"] = agg["institution_type_cw"].fillna("bank")
     except Exception as _exc:
         logger.debug("HMDA respondent crosswalk unavailable: %s", _exc)
