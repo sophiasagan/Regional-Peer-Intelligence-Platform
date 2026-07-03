@@ -21,7 +21,7 @@ from typing import Literal, Optional
 import pandas as pd
 from sqlalchemy import select, text
 
-from db import fdic_deposits, get_engine, hmda_originations, institutions_quarterly
+from db import fdic_deposits, get_engine, hmda_originations, hmda_respondents, institutions_quarterly
 
 logger = logging.getLogger(__name__)
 
@@ -516,19 +516,20 @@ def _fetch_hmda_originations(
         with engine.connect() as conn:
             resp_ids = agg["respondent_id"].astype(str).tolist()
             result = conn.execute(
-                text(
-                    "SELECT respondent_id, respondent_name, institution_type "
-                    "FROM hmda_respondents WHERE respondent_id = ANY(:ids)"
-                ),
-                {"ids": resp_ids},
+                select(
+                    hmda_respondents.c.respondent_id,
+                    hmda_respondents.c.respondent_name,
+                    hmda_respondents.c.institution_type,
+                ).where(hmda_respondents.c.respondent_id.in_(resp_ids))
             )
             crosswalk = pd.DataFrame(result.mappings().all())
         if not crosswalk.empty:
             agg = agg.merge(crosswalk, on="respondent_id", how="left", suffixes=("", "_cw"))
-            agg["institution_name"] = agg["respondent_name"].fillna(agg["institution_name"])
+            mask = crosswalk.set_index("respondent_id")["respondent_name"]
+            agg["institution_name"] = agg["respondent_id"].map(mask).fillna(agg["institution_name"])
             agg["institution_type"] = agg["institution_type_cw"].fillna("bank")
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("HMDA respondent crosswalk unavailable: %s", _exc)
 
     return agg[["charter_or_cert", "institution_name", "institution_type",
                 "metric_value", "confidence", "data_period"]]

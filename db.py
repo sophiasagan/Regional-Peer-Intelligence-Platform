@@ -192,6 +192,18 @@ cu_deposit_allocations = Table(
 )
 
 
+hmda_respondents = Table(
+    "hmda_respondents",
+    metadata,
+    Column("respondent_id", String(20), primary_key=True),  # LEI (post-2018)
+    Column("respondent_name", Text),
+    Column("institution_type", String(10)),   # "bank" | "cu" | "nonbank"
+    Column("respondent_city", String(100)),
+    Column("respondent_state", String(2)),
+    Column("fetched_at", DateTime, server_default=func.now()),
+)
+
+
 def get_engine(db_url: str | None = None) -> Engine:
     url = db_url or os.environ.get("DATABASE_URL")
     if not url:
