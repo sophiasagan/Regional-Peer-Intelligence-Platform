@@ -375,7 +375,13 @@ def parse_lar(path_or_stream: "str | io.TextIOWrapper", year: int) -> pd.DataFra
         dtype=str,
         engine="python",    # C parser overflows on some HMDA rows
         on_bad_lines="warn",
+        chunksize=500_000,  # process 500k rows at a time — avoids OOM on ~7 GB CSV
     )
+
+    # Only load the ~7 columns we need from the 90+ in the file (~13× memory reduction)
+    field_map_lower = {k.lower(): v for k, v in field_map.items()}
+    usecols_names = [col for col in header_cols if col in field_map_lower]
+    csv_kwargs["usecols"] = usecols_names
 
     if is_stream:
         # Header already consumed — provide column names explicitly so pandas
@@ -386,47 +392,64 @@ def parse_lar(path_or_stream: "str | io.TextIOWrapper", year: int) -> pd.DataFra
         csv_kwargs["encoding"]    = "latin-1"
         csv_kwargs["compression"] = None   # file may have .zip ext but be CSV
 
-    # Read ALL columns — usecols lambda can silently drop needed columns if the
-    # file has BOM bytes, extra spaces, or unexpected casing in column names.
-    df = pd.read_csv(read_source, **csv_kwargs)
-    # Normalise column names: strip whitespace + lowercase, then apply field map
-    df.columns = [c.strip().lower() for c in df.columns]
-    df = df.rename(columns={k.lower(): v for k, v in field_map.items()})
-    logger.info("Columns after rename: %s", df.columns.tolist())
+    # Read in 500k-row chunks and filter each chunk immediately so we never hold
+    # the full ~7 GB decompressed dataset in memory at once.
+    filtered_chunks: list[pd.DataFrame] = []
+    total_read = 0
 
-    # Keep only the columns we need; drop everything else to free memory
-    keep = [v for v in field_map.values() if v in df.columns]
-    df = df[keep]
+    for chunk in pd.read_csv(read_source, **csv_kwargs):
+        total_read += len(chunk)
 
-    for col in ("year", "action_taken", "loan_purpose", "loan_amount"):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    if "agency_code" in df.columns:
-        df["agency_code"] = pd.to_numeric(df["agency_code"], errors="coerce")
+        chunk.columns = [c.strip().lower() for c in chunk.columns]
+        chunk = chunk.rename(columns=field_map_lower)
 
-    # ── Normalise county FIPS to 5-char string ────────────────────────────────
-    # Post-2018: state_code is 2-digit numeric ("26"), county_code is 3-digit ("049")
-    # Pre-2018: state_code is 2-char text ("MI"), county_code is 3-digit ("049")
-    # Some post-2018 files already provide the full 5-digit FIPS in county_code.
-    if "state_code" in df.columns and "county_fips" in df.columns:
-        sc = df["state_code"].astype(str).str.strip().str.zfill(2)
-        co = df["county_fips"].astype(str).str.strip()
-        # If county_code already looks like 5-digit FIPS, use as-is
-        already_five = co.str.len() == 5
-        df.loc[~already_five, "county_fips"] = sc[~already_five] + co[~already_five].str.zfill(3)
+        for col in ("year", "action_taken", "loan_purpose", "loan_amount"):
+            if col in chunk.columns:
+                chunk[col] = pd.to_numeric(chunk[col], errors="coerce")
+        if "agency_code" in chunk.columns:
+            chunk["agency_code"] = pd.to_numeric(chunk["agency_code"], errors="coerce")
 
-    # ── Filter to originated mortgage loans ───────────────────────────────────
-    mask = df["action_taken"] == ACTION_ORIGINATED
-    if is_post2018:
-        mask &= df["loan_purpose"].isin(MORTGAGE_PURPOSES_POST2018)
-    else:
-        mask &= df["loan_purpose"].isin(MORTGAGE_PURPOSES_PRE2018)
-        # Pre-2018: optionally restrict to CU-only (agency_code=7) if desired;
-        # we keep all institution types for competitive market share.
+        # Normalise county FIPS to 5-char string
+        # Post-2018: state_code="26", county_code="049" → "26049"
+        # Pre-2018:  state_code="MI", county_code="049" → "26049" (after FIPS lookup — kept as-is here)
+        if "state_code" in chunk.columns and "county_fips" in chunk.columns:
+            sc = chunk["state_code"].astype(str).str.strip().str.zfill(2)
+            co = chunk["county_fips"].astype(str).str.strip()
+            already_five = co.str.len() == 5
+            chunk.loc[~already_five, "county_fips"] = (
+                sc[~already_five] + co[~already_five].str.zfill(3)
+            )
 
-    df = df[mask].copy()
-    df = df[df["county_fips"].str.len() == 5]          # drop bad FIPS
-    df = df[df["county_fips"].str.isdigit()]           # drop non-numeric FIPS
+        # Filter to originated mortgage loans (typically ~15% of rows)
+        mask = chunk["action_taken"] == ACTION_ORIGINATED
+        if is_post2018:
+            mask &= chunk["loan_purpose"].isin(MORTGAGE_PURPOSES_POST2018)
+        else:
+            mask &= chunk["loan_purpose"].isin(MORTGAGE_PURPOSES_PRE2018)
+
+        chunk = chunk[mask].copy()
+
+        if "county_fips" in chunk.columns:
+            chunk = chunk[chunk["county_fips"].astype(str).str.len() == 5]
+            chunk = chunk[chunk["county_fips"].astype(str).str.isdigit()]
+
+        if not chunk.empty:
+            filtered_chunks.append(chunk)
+
+        if total_read % (500_000 * 10) == 0:
+            kept = sum(len(c) for c in filtered_chunks)
+            logger.info(
+                "Progress: %d rows read, %d originated mortgage rows kept",
+                total_read, kept,
+            )
+
+    logger.info("Total rows processed: %d", total_read)
+
+    if not filtered_chunks:
+        logger.warning("No originated mortgage rows found in HMDA data")
+        return pd.DataFrame()
+
+    df = pd.concat(filtered_chunks, ignore_index=True)
     logger.info("Kept %d originated mortgage rows after filter", len(df))
     return df
 
