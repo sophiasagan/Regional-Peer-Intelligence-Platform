@@ -29,9 +29,11 @@ Or pass the zip/csv directly:
 from __future__ import annotations
 
 import argparse
+import io
 import logging
 import shutil
 import zipfile
+import zlib
 from pathlib import Path
 
 import pandas as pd
@@ -110,6 +112,81 @@ def _detect_schema(header_cols: list[str]) -> tuple[dict, bool]:
 _ZIP_MAGIC = b"PK\x03\x04"
 
 
+class _DeflateStream(io.RawIOBase):
+    """Wrap a raw-DEFLATE compressed source as a readable byte stream.
+
+    Used when a ZIP was created in streaming mode (data-descriptor bit set) and
+    was never finalized with a central directory, so Python's zipfile raises
+    BadZipFile.  We skip the local file header manually and decompress on the fly.
+    """
+
+    def __init__(self, source: io.IOBase) -> None:
+        self._src  = source
+        self._dec  = zlib.decompressobj(wbits=-15)  # raw DEFLATE
+        self._buf  = b""
+        self._done = False
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: bytearray) -> int:
+        while not self._buf and not self._done:
+            raw = self._src.read(1 << 20)  # 1 MB chunks
+            if not raw:
+                self._done = True
+                break
+            try:
+                self._buf += self._dec.decompress(raw)
+            except zlib.error:
+                # DEFLATE stream ended; data descriptor may follow — stop here
+                try:
+                    self._buf += self._dec.flush()
+                except zlib.error:
+                    pass
+                self._done = True
+        n = min(len(b), len(self._buf))
+        b[:n] = self._buf[:n]
+        self._buf = self._buf[n:]
+        return n
+
+
+def _open_streaming_zip(zip_path: Path) -> io.TextIOWrapper:
+    """Return a text stream over the first DEFLATE entry in a no-EOCD ZIP.
+
+    Opens the file, reads the local file header, and returns a latin-1 text
+    wrapper over the decompressed byte stream WITHOUT writing to disk.
+    """
+    fh = open(zip_path, "rb")
+    sig = fh.read(4)
+    if sig != _ZIP_MAGIC:
+        fh.close()
+        raise RuntimeError(f"Not a ZIP local header: {sig!r}")
+
+    fh.read(2)  # version needed
+    fh.read(2)  # flags
+    method = int.from_bytes(fh.read(2), "little")
+    fh.read(4)  # mod time + date
+    fh.read(4)  # crc32
+    fh.read(4)  # compressed size  (0 / 0xFFFFFFFF in streaming zips)
+    fh.read(4)  # uncompressed size
+    fname_len = int.from_bytes(fh.read(2), "little")
+    extra_len = int.from_bytes(fh.read(2), "little")
+    fname = fh.read(fname_len).decode("utf-8", errors="replace")
+    fh.read(extra_len)
+
+    logger.info(
+        "Streaming ZIP64 (no EOCD): entry=%s  method=%d  data_start=%d",
+        fname, method, fh.tell(),
+    )
+    if method != 8:
+        fh.close()
+        raise RuntimeError(f"Expected DEFLATE (8), got method {method}")
+
+    raw   = _DeflateStream(fh)
+    buf   = io.BufferedReader(raw, buffer_size=1 << 20)
+    return io.TextIOWrapper(buf, encoding="latin-1", errors="replace")
+
+
 def _extract_csv(zip_path: Path, extract_dir: Path, max_depth: int = 3) -> Path:
     """Extract the largest member from a zip, recursing if it is itself a zip.
 
@@ -131,8 +208,13 @@ def _extract_csv(zip_path: Path, extract_dir: Path, max_depth: int = 3) -> Path:
     try:
         zf = zipfile.ZipFile(zip_path)
     except zipfile.BadZipFile:
-        logger.info("BadZipFile — treating as plain file: %s", zip_path)
-        return zip_path
+        # If magic is PK\x03\x04 the file IS a ZIP but has no central directory
+        # (streaming ZIP64 created without finalizing EOCD).  Signal the caller
+        # to use _open_streaming_zip instead — return a sentinel value None.
+        logger.info(
+            "BadZipFile on a file with ZIP magic — streaming ZIP64 (no EOCD): %s", zip_path
+        )
+        return None  # sentinel: caller must use _open_streaming_zip
 
     with zf:
         members = zf.infolist()
@@ -234,6 +316,12 @@ def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = No
     # CFPB sometimes ships zip-in-zip (outer zip → inner zip → CSV).
     csv_path = _extract_csv(zip_path, extract_dir, max_depth=3)
 
+    if csv_path is None:
+        # Streaming ZIP64 with no central directory — cannot use zipfile.
+        # Signal ingest() to use _open_streaming_zip for on-the-fly DEFLATE.
+        logger.info("Streaming ZIP64 (no EOCD) — will parse on-the-fly: %s", zip_path)
+        return "__streaming__:" + str(zip_path)
+
     size_mb = csv_path.stat().st_size / 1e6
     logger.info("Final file: %s (%.1f MB)", csv_path, size_mb)
     if size_mb < 1:
@@ -246,13 +334,26 @@ def fetch_lar(year: int, dest_dir: str = "data/raw", local_file: str | None = No
 
 # ── Parse ─────────────────────────────────────────────────────────────────────
 
-def parse_lar(path: str, year: int) -> pd.DataFrame:
-    """Read LAR, auto-detect schema, return cleaned DataFrame."""
-    logger.info("Parsing HMDA LAR from %s", path)
+def parse_lar(path_or_stream: "str | io.TextIOWrapper", year: int) -> pd.DataFrame:
+    """Read LAR, auto-detect schema, return cleaned DataFrame.
 
-    # Peek at header to detect delimiter and schema
-    with open(path, "r", encoding="latin-1", errors="replace") as fh:
-        header_line = fh.readline()
+    Accepts either a file path (str) or a TextIOWrapper already positioned at
+    the first byte of a streaming ZIP64 that has been opened with
+    _open_streaming_zip().  For streams the header line is consumed here and
+    then pd.read_csv is called with explicit column names so it reads the
+    remaining data rows without trying to seek back to the start.
+    """
+    is_stream = not isinstance(path_or_stream, str)
+
+    if is_stream:
+        logger.info("Parsing HMDA LAR from streaming ZIP64 source")
+        header_line = path_or_stream.readline()
+        read_source = path_or_stream          # stream is now at first data row
+    else:
+        logger.info("Parsing HMDA LAR from %s", path_or_stream)
+        with open(path_or_stream, "r", encoding="latin-1", errors="replace") as fh:
+            header_line = fh.readline()
+        read_source = path_or_stream          # re-read from start for pd.read_csv
 
     if "|" in header_line and header_line.count("|") > 5:
         sep = "|"
@@ -269,17 +370,25 @@ def parse_lar(path: str, year: int) -> pd.DataFrame:
         header_cols[:10],
     )
 
-    # Read ALL columns — usecols lambda can silently drop needed columns if the
-    # file has BOM bytes, extra spaces, or unexpected casing in column names.
-    df = pd.read_csv(
-        path,
+    csv_kwargs: dict = dict(
         sep=sep,
         dtype=str,
-        encoding="latin-1",
         engine="python",    # C parser overflows on some HMDA rows
         on_bad_lines="warn",
-        compression=None,   # file may have .zip extension but be plain CSV
     )
+
+    if is_stream:
+        # Header already consumed — provide column names explicitly so pandas
+        # reads the stream as data-only (no header row to skip / seek back for).
+        csv_kwargs["names"]  = header_cols
+        csv_kwargs["header"] = None
+    else:
+        csv_kwargs["encoding"]    = "latin-1"
+        csv_kwargs["compression"] = None   # file may have .zip ext but be CSV
+
+    # Read ALL columns — usecols lambda can silently drop needed columns if the
+    # file has BOM bytes, extra spaces, or unexpected casing in column names.
+    df = pd.read_csv(read_source, **csv_kwargs)
     # Normalise column names: strip whitespace + lowercase, then apply field map
     df.columns = [c.strip().lower() for c in df.columns]
     df = df.rename(columns={k.lower(): v for k, v in field_map.items()})
@@ -373,8 +482,15 @@ def upsert(df: pd.DataFrame, year: int, db_url: str | None = None) -> int:
 
 def ingest(year: int, db_url: str | None = None, local_file: str | None = None) -> None:
     path = fetch_lar(year, local_file=local_file)
-    df   = parse_lar(path, year)
-    df   = aggregate_by_county(df)
+    if path.startswith("__streaming__:"):
+        # ZIP64 with no central directory — decompress on the fly via raw DEFLATE
+        actual_zip = Path(path[len("__streaming__:"):])
+        logger.info("Streaming DEFLATE decompression: %s", actual_zip)
+        stream = _open_streaming_zip(actual_zip)
+        df = parse_lar(stream, year)
+    else:
+        df = parse_lar(path, year)
+    df = aggregate_by_county(df)
     upsert(df, year, db_url)
 
 
