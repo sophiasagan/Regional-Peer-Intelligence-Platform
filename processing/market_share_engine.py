@@ -669,12 +669,18 @@ def calculate_market_share(
 
     # ── Prior period data (for QoQ / prior-period change) ─────────────────────
     prior_period = _prior_quarter(period) if _is_quarterly(period) else _prior_year_period(period)
+    current_actual = current["data_period"].iloc[0] if not current.empty and "data_period" in current.columns else None
     try:
         prior_p = _fetch_metric_data(geography_type, geography_id, prior_period, metric, institution_types, engine)
         total_prior_p = prior_p["metric_value"].sum()
         if total_prior_p > 0:
             prior_p["market_share"] = prior_p["metric_value"] / total_prior_p
-        prior_p_map = _build_share_map(prior_p)
+        prior_p_actual = prior_p["data_period"].iloc[0] if not prior_p.empty and "data_period" in prior_p.columns else None
+        # If both fall back to the same actual data year (e.g. both use 2022 HMDA
+        # because later years aren't ingested yet), the diff is 0 everywhere —
+        # meaningless noise.  Return None so the UI shows "—" instead of "+0.00 pp".
+        prior_p_map = {} if (current_actual and prior_p_actual and current_actual == prior_p_actual) \
+                         else _build_share_map(prior_p)
     except Exception:
         prior_p_map = {}
 
@@ -687,7 +693,9 @@ def calculate_market_share(
             total_prior_y = prior_y["metric_value"].sum()
             if total_prior_y > 0:
                 prior_y["market_share"] = prior_y["metric_value"] / total_prior_y
-            prior_yoy_map = _build_share_map(prior_y)
+            prior_y_actual = prior_y["data_period"].iloc[0] if not prior_y.empty and "data_period" in prior_y.columns else None
+            prior_yoy_map = {} if (current_actual and prior_y_actual and current_actual == prior_y_actual) \
+                               else _build_share_map(prior_y)
         except Exception:
             prior_yoy_map = {}
     else:
