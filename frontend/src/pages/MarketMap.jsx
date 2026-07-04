@@ -393,6 +393,16 @@ export default function MarketMap({ charterNumber, token }) {
       .catch(() => setCompetitorCounties([]));
   }, [selectedCompId, activeMetric, year, token]);
 
+  // Switching to a non-county geo type clears the map selection so the right
+  // panel uses the typed geo ID rather than staying locked on the clicked county.
+  function handleGeoTypeChange(newType) {
+    setGeoType(newType);
+    setGeoId('');
+    setSelectedCounty(null);
+  }
+
+  // When the right panel is driven by a map click, always use county geography.
+  // Otherwise use whatever the geo selector says.
   const rightGeoType = selectedCounty ? 'county' : geoType;
   const rightGeoId   = selectedCounty ? selectedCounty.fips : geoId;
 
@@ -405,7 +415,7 @@ export default function MarketMap({ charterNumber, token }) {
           <div className="map-controls-overlay">
             <GeographySelector
               geoType={geoType}
-              onGeoTypeChange={setGeoType}
+              onGeoTypeChange={handleGeoTypeChange}
               geoId={geoId}
               onGeoIdChange={setGeoId}
             />
