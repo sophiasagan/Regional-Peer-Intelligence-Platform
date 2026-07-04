@@ -32,6 +32,7 @@ anthropic==0.28.0
 
 # Geo
 geopy==2.4.1
+openpyxl==3.1.5
 
 # Dev / testing
 pytest==8.2.0

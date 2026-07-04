@@ -192,6 +192,17 @@ cu_deposit_allocations = Table(
 )
 
 
+geo_cbsa_counties = Table(
+    "geo_cbsa_counties",
+    metadata,
+    Column("cbsa_code", String(5), primary_key=True),
+    Column("county_fips", String(5), primary_key=True),
+    Column("cbsa_title", Text),
+    Column("county_name", String(100)),
+    Column("state_fips", String(2)),
+    Column("is_metro", Boolean),
+)
+
 hmda_respondents = Table(
     "hmda_respondents",
     metadata,
