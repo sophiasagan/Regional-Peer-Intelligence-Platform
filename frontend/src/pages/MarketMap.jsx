@@ -340,7 +340,9 @@ export default function MarketMap({ charterNumber, token }) {
   const mapContainerRef = useRef(null);
 
   const year = parseInt(period.slice(0, 4), 10);
-  const heatmapCounties = useHeatmapData(charterNumber, activeMetric, year, token);
+  // Map always colors by deposits — only metric with branch-level geographic data.
+  // activeMetric controls the right-panel competitor table, not the choropleth.
+  const heatmapCounties = useHeatmapData(charterNumber, 'deposits', year, token);
   const [competitorCounties, setCompetitorCounties] = useState([]);
 
   const colorExpr = useMemo(
@@ -401,7 +403,7 @@ export default function MarketMap({ charterNumber, token }) {
             </div>
           )}
 
-          <ColorLegend metric={activeMetric} />
+          <ColorLegend metric="deposits" />
         </div>
 
         {/* Right panel (40%) */}

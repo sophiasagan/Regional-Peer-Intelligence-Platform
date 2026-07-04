@@ -155,6 +155,9 @@ export default function CompetitorTable({
   const [sortCol,      setSortCol]      = useState('market_share');
   const [sortAsc,      setSortAsc]      = useState(false);   // descending by default
 
+  // Sync with parent's controlled metric (e.g. map metric bar click)
+  useEffect(() => { setActiveMetric(defaultMetric); }, [defaultMetric]);
+
   const { data, loading, error } = useMarketShareData(geoType, geoId, period, activeMetric, token);
 
   const myId = charterNumber ? `ncua:${charterNumber}` : null;
