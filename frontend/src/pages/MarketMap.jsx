@@ -75,15 +75,8 @@ function useHeatmapData(charterNumber, metric, year, token) {
   return counties;
 }
 
-// customRegionFips: string[] of FIPS codes in the active custom region selection.
-// Priority order:
-//   1. Competitor county  → orange
-//   2. In region, has share data → share-based blue (data wins over region marker)
-//   3. In region, no share data  → indigo (visually marks the selected county)
-//   4. No data                   → grey
-function buildColorExpression(heatmapCounties, competitorCounties, customRegionFips = []) {
-  const competitorFips  = new Set(competitorCounties.map(c => c.county_fips));
-  const regionFipsSet   = new Set(customRegionFips);
+function buildColorExpression(heatmapCounties, competitorCounties) {
+  const competitorFips = new Set(competitorCounties.map(c => c.county_fips));
   const matchPairs = [];
   for (const county of heatmapCounties) {
     matchPairs.push(county.county_fips, county.market_share);
@@ -93,7 +86,8 @@ function buildColorExpression(heatmapCounties, competitorCounties, customRegionF
   // numeric-looking GeoJSON string IDs (e.g. "26049") to integers internally.
   const idStr = ['to-string', ['id']];
 
-  // Build the share expression; fallback -1 means "no data"
+  if (matchPairs.length === 0 && competitorFips.size === 0) return NO_DATA_COLOR;
+
   const shareExpr = matchPairs.length > 0
     ? ['match', idStr, ...matchPairs, -1]
     : -1;
@@ -102,26 +96,9 @@ function buildColorExpression(heatmapCounties, competitorCounties, customRegionF
     ? [['in', idStr, ['literal', [...competitorFips]]], COMPETITOR_COLOR]
     : [];
 
-  // Counties in the region but without share data should show the region colour
-  // so they're visually selected. Counties that DO have share data keep the
-  // share colour (priority: data over region marker).
-  const regionNoDataClause = regionFipsSet.size > 0
-    ? [
-        ['all',
-          ['in', idStr, ['literal', [...regionFipsSet]]],
-          ['<', shareExpr, 0],
-        ],
-        REGION_SELECTED_COLOR,
-      ]
-    : [];
-
-  // If there's no match-pairs data at all, fall through to region/no-data colours
-  if (matchPairs.length === 0 && regionFipsSet.size === 0) return NO_DATA_COLOR;
-
   return [
     'case',
     ...competitorClause,
-    ...regionNoDataClause,
     ['<', shareExpr, 0], NO_DATA_COLOR,
     ['step', shareExpr,
       SHARE_COLORS[3].color,
@@ -132,15 +109,23 @@ function buildColorExpression(heatmapCounties, competitorCounties, customRegionF
   ];
 }
 
-function useMapLibre(containerRef, onCountyClick, colorExpr) {
-  const mapRef       = useRef(null);
-  const loadedRef    = useRef(false);
-  const colorExprRef = useRef(colorExpr);
+// Returns a MapLibre line-width expression: 3px for counties in the region, 0 otherwise.
+function buildRegionOutlineExpr(customRegionFips) {
+  if (!customRegionFips || customRegionFips.length === 0) return 0;
+  return ['case', ['in', ['to-string', ['id']], ['literal', customRegionFips]], 3, 0];
+}
+
+function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) {
+  const mapRef            = useRef(null);
+  const loadedRef         = useRef(false);
+  const colorExprRef      = useRef(colorExpr);
+  const regionOutlineRef  = useRef(regionOutlineExpr);
   // Always call the LATEST onCountyClick — geoType changes what it does (county
   // select vs custom-region toggle) but the map closure is created only once.
-  const onClickRef   = useRef(onCountyClick);
-  colorExprRef.current = colorExpr;
-  onClickRef.current   = onCountyClick;
+  const onClickRef        = useRef(onCountyClick);
+  colorExprRef.current     = colorExpr;
+  regionOutlineRef.current = regionOutlineExpr;
+  onClickRef.current       = onCountyClick;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -199,11 +184,23 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
         },
       });
 
+      // Thick indigo border for custom-region counties — sits above all other layers
+      map.addLayer({
+        id:     'county-region-outline',
+        type:   'line',
+        source: 'counties',
+        paint:  {
+          'line-color': REGION_SELECTED_COLOR,
+          'line-width': 0,
+        },
+      });
+
       loadedRef.current = true;
 
-      // Apply whichever colorExpr arrived while the style was loading
+      // Apply whichever colorExpr / regionOutlineExpr arrived while the style was loading
       try {
         map.setPaintProperty('county-fill', 'fill-color', colorExprRef.current);
+        map.setPaintProperty('county-region-outline', 'line-width', regionOutlineRef.current);
       } catch (err) {
         console.error('[MarketMap] setPaintProperty on load failed:', err);
       }
@@ -276,6 +273,16 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
       console.error('[MarketMap] setPaintProperty update failed:', err, colorExpr);
     }
   }, [colorExpr]);
+
+  // Update region outline when custom region selection changes
+  useEffect(() => {
+    if (!loadedRef.current || !mapRef.current) return;
+    try {
+      mapRef.current.setPaintProperty('county-region-outline', 'line-width', regionOutlineExpr);
+    } catch (err) {
+      console.error('[MarketMap] region outline update failed:', err);
+    }
+  }, [regionOutlineExpr]);
 }
 
 // ── Shared autocomplete hook ──────────────────────────────────────────────────
@@ -568,7 +575,7 @@ function PeriodSelector({ period, onPeriodChange, compareMode, comparePeriod, on
   );
 }
 
-function ColorLegend({ metric, showRegion }) {
+function ColorLegend({ metric }) {
   return (
     <div className="color-legend">
       <div className="legend-title">{METRIC_LABELS[metric] ?? metric} Share</div>
@@ -585,12 +592,6 @@ function ColorLegend({ metric, showRegion }) {
             <span className="legend-label">{label}</span>
           </div>
         ))}
-        {showRegion && (
-          <div className="legend-row">
-            <span className="legend-swatch" style={{ backgroundColor: REGION_SELECTED_COLOR }} />
-            <span className="legend-label">Custom region</span>
-          </div>
-        )}
         <div className="legend-row">
           <span className="legend-swatch" style={{ backgroundColor: COMPETITOR_COLOR }} />
           <span className="legend-label">Selected competitor</span>
@@ -642,11 +643,18 @@ export default function MarketMap({ charterNumber, token }) {
     () => buildColorExpression(
       heatmapCounties,
       selectedCompId ? competitorCounties : [],
+    ),
+    [heatmapCounties, competitorCounties, selectedCompId],
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const regionOutlineExpr = useMemo(
+    () => buildRegionOutlineExpr(
       geoType === 'custom_region' ? [...customRegion.keys()] : [],
     ),
-    // customRegionFipsStr tracks actual key changes without re-running on every Map mutation
+    // customRegionFipsStr as stable dep — Map identity changes on every update
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [heatmapCounties, competitorCounties, selectedCompId, geoType, customRegionFipsStr],
+    [geoType, customRegionFipsStr],
   );
 
   function handleGeoTypeChange(newType) {
@@ -677,7 +685,7 @@ export default function MarketMap({ charterNumber, token }) {
   }), []);
 
   const mapContainerCb = useCallback(el => { mapContainerRef.current = el; }, []);
-  useMapLibre(mapContainerRef, handleCountyClick, colorExpr);
+  useMapLibre(mapContainerRef, handleCountyClick, colorExpr, regionOutlineExpr);
 
   useEffect(() => {
     if (!selectedCompId?.startsWith('ncua:')) {
@@ -737,7 +745,7 @@ export default function MarketMap({ charterNumber, token }) {
             </div>
           )}
 
-          <ColorLegend metric="deposits" showRegion={geoType === 'custom_region' && customRegion.size > 0} />
+          <ColorLegend metric="deposits" />
         </div>
 
         {/* Right panel (40%) */}
