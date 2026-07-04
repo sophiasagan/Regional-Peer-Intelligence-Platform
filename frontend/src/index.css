@@ -559,6 +559,14 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .geo-tab--active    { background: #1A237E; color: #fff; border-color: #1A237E; }
 .geo-id-input       { border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 100%; }
 
+/* Custom Region multi-picker */
+.custom-region-picker { display: flex; flex-direction: column; gap: 5px; }
+.cr-chips             { display: flex; flex-wrap: wrap; gap: 4px; }
+.cr-chip              { display: inline-flex; align-items: center; gap: 4px; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 12px; padding: 2px 8px; font-size: 11px; color: #1A237E; }
+.cr-chip-remove       { background: none; border: none; cursor: pointer; font-size: 13px; line-height: 1; color: #6B7280; padding: 0; }
+.cr-chip-remove:hover { color: #DC2626; }
+.cr-hint              { font-size: 11px; color: var(--text-muted); margin: 2px 0 0; }
+
 /* MSA autocomplete dropdown */
 .msa-dropdown        { position: absolute; top: 100%; left: 0; right: 0; z-index: 200; background: #fff; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.15); margin-top: 2px; max-height: 220px; overflow-y: auto; }
 .msa-option          { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; font-size: 12px; cursor: pointer; gap: 8px; }

@@ -110,10 +110,12 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
 function useMapLibre(containerRef, onCountyClick, colorExpr) {
   const mapRef       = useRef(null);
   const loadedRef    = useRef(false);
-  // Always holds the latest colorExpr so the map.on('load') closure can apply it
-  // even when heatmap data arrives before the style finishes loading.
   const colorExprRef = useRef(colorExpr);
+  // Always call the LATEST onCountyClick — geoType changes what it does (county
+  // select vs custom-region toggle) but the map closure is created only once.
+  const onClickRef   = useRef(onCountyClick);
   colorExprRef.current = colorExpr;
+  onClickRef.current   = onCountyClick;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -224,7 +226,7 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
           map.setFeatureState({ source: 'counties', id: selectedId }, { selected: true });
         }
 
-        if (fips) onCountyClick({ fips, name: name || fips });
+        if (fips) onClickRef.current({ fips, name: name || fips });
       });
 
       map.on('mouseenter', 'county-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -398,7 +400,78 @@ function MsaSearchInput({ geoId, onGeoIdChange, token }) {
   );
 }
 
-function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, token }) {
+// ── Custom Region multi-county picker ────────────────────────────────────────
+
+function CustomRegionInput({ selectedMap, onAdd, onRemove, token }) {
+  const [query, setQuery] = useState('');
+  const [open,  setOpen]  = useState(false);
+  const containerRef = useRef(null);
+
+  const results = useGeoSearch('/geography/county/search', query, token);
+  useEffect(() => { setOpen(results.length > 0 && query.length >= 2); }, [results, query]);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const chips = [...selectedMap.entries()]; // [[fips, label], ...]
+
+  return (
+    <div className="custom-region-picker" ref={containerRef}>
+      {chips.length > 0 && (
+        <div className="cr-chips">
+          {chips.map(([fips, label]) => (
+            <span key={fips} className="cr-chip">
+              {label}
+              <button className="cr-chip-remove" onClick={() => onRemove(fips)} title="Remove">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ position: 'relative' }}>
+        <input
+          className="geo-id-input"
+          type="text"
+          value={query}
+          onChange={e => { setQuery(e.target.value); }}
+          placeholder={chips.length ? 'Add another county…' : 'Search county or click map'}
+          autoComplete="off"
+        />
+        {open && (
+          <div className="msa-dropdown" role="listbox">
+            {results
+              .filter(c => !selectedMap.has(c.county_fips))
+              .map(c => (
+                <div
+                  key={c.county_fips}
+                  className="msa-option"
+                  role="option"
+                  onMouseDown={() => {
+                    onAdd(c);
+                    setQuery('');
+                    setOpen(false);
+                  }}
+                >
+                  <span className="msa-option-title">{c.county_name}, {c.state_code}</span>
+                  <span className="msa-option-code">{c.county_fips}</span>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+      {chips.length === 0 && (
+        <p className="cr-hint">Click counties on the map to add them, or search above.</p>
+      )}
+    </div>
+  );
+}
+
+function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, token,
+                              customRegion, onAddToRegion, onRemoveFromRegion }) {
   return (
     <div className="geo-selector">
       <div className="geo-type-tabs" role="group" aria-label="Geography type">
@@ -416,6 +489,13 @@ function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, tok
         <CountySearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
       ) : geoType === 'msa' ? (
         <MsaSearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
+      ) : geoType === 'custom_region' ? (
+        <CustomRegionInput
+          selectedMap={customRegion}
+          onAdd={onAddToRegion}
+          onRemove={onRemoveFromRegion}
+          token={token}
+        />
       ) : (
         <input
           className="geo-id-input"
@@ -515,6 +595,8 @@ export default function MarketMap({ charterNumber, token }) {
   const [activeMetric,   setActiveMetric]  = useState('deposits');
   const [selectedCounty, setSelectedCounty] = useState(null);
   const [selectedCompId, setSelectedCompId] = useState(null);
+  // Custom region: Map<fips, displayLabel> built from search + map clicks
+  const [customRegion,   setCustomRegion]  = useState(new Map());
 
   const mapContainerRef = useRef(null);
 
@@ -530,7 +612,7 @@ export default function MarketMap({ charterNumber, token }) {
   );
 
   const mapContainerCb = useCallback(el => { mapContainerRef.current = el; }, []);
-  useMapLibre(mapContainerRef, setSelectedCounty, colorExpr);
+  useMapLibre(mapContainerRef, handleCountyClick, colorExpr);
 
   useEffect(() => {
     if (!selectedCompId?.startsWith('ncua:')) {
@@ -546,18 +628,41 @@ export default function MarketMap({ charterNumber, token }) {
       .catch(() => setCompetitorCounties([]));
   }, [selectedCompId, activeMetric, year, token]);
 
-  // Switching to a non-county geo type clears the map selection so the right
-  // panel uses the typed geo ID rather than staying locked on the clicked county.
   function handleGeoTypeChange(newType) {
     setGeoType(newType);
     setGeoId('');
     setSelectedCounty(null);
+    setCustomRegion(new Map());
   }
 
-  // When the right panel is driven by a map click, always use county geography.
-  // Otherwise use whatever the geo selector says.
-  const rightGeoType = selectedCounty ? 'county' : geoType;
-  const rightGeoId   = selectedCounty ? selectedCounty.fips : geoId;
+  // Map click routes to: county selection (default) or custom region toggle
+  const handleCountyClick = useCallback(({ fips, name }) => {
+    if (geoType === 'custom_region') {
+      setCustomRegion(prev => {
+        const next = new Map(prev);
+        if (next.has(fips)) next.delete(fips); else next.set(fips, name);
+        return next;
+      });
+    } else {
+      setSelectedCounty({ fips, name });
+    }
+  }, [geoType]);
+
+  const addToRegion    = useCallback(county => setCustomRegion(prev =>
+    new Map(prev).set(county.county_fips, `${county.county_name}, ${county.state_code}`)
+  ), []);
+  const removeFromRegion = useCallback(fips => setCustomRegion(prev => {
+    const next = new Map(prev); next.delete(fips); return next;
+  }), []);
+
+  const customRegionFipsStr = [...customRegion.keys()].join(',');
+
+  const rightGeoType =
+    geoType === 'custom_region' ? 'custom_region' :
+    selectedCounty ? 'county' : geoType;
+  const rightGeoId =
+    geoType === 'custom_region' ? customRegionFipsStr :
+    selectedCounty ? selectedCounty.fips : geoId;
 
   return (
     <div className="market-map-page">
@@ -572,6 +677,9 @@ export default function MarketMap({ charterNumber, token }) {
               geoId={geoId}
               onGeoIdChange={setGeoId}
               token={token}
+              customRegion={customRegion}
+              onAddToRegion={addToRegion}
+              onRemoveFromRegion={removeFromRegion}
             />
             <PeriodSelector
               period={period}

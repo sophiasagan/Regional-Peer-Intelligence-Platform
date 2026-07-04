@@ -83,7 +83,18 @@ def _resolve_msa_counties(msa_cbsa: str, engine) -> list[str]:
 
 
 def _resolve_custom_region_counties(region_id: str, engine) -> list[str]:
-    """Look up county FIPS list for a custom geography UUID (from peer_groups table)."""
+    """Return county FIPS list for a custom region.
+
+    Accepts two formats:
+      - Comma-separated 5-digit FIPS: "26049,26157,26125" (from the frontend multi-picker)
+      - UUID: looks up geography_ids in the peer_groups table
+    """
+    # Fast path: comma-separated FIPS sent directly from the multi-picker
+    parts = [p.strip() for p in region_id.split(",") if p.strip()]
+    if parts and all(len(p) == 5 and p.isdigit() for p in parts):
+        return parts
+
+    # UUID path: look up in peer_groups
     try:
         with engine.connect() as conn:
             result = conn.execute(
