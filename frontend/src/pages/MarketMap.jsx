@@ -764,6 +764,8 @@ export default function MarketMap({ charterNumber, token }) {
             charterNumber={charterNumber}
             token={token}
             defaultMetric={activeMetric}
+            selectedCompetitor={selectedCompId}
+            onSelectCompetitor={setSelectedCompId}
           />
 
           {compareMode && comparePeriod && rightGeoId && (

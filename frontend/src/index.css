@@ -226,7 +226,11 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .col-rank             { width: 36px; text-align: center; }
 .ct-name              { font-weight: 500; }
 .ct-yours-tag         { font-size: 10px; font-weight: 600; background: #E8EAF6; color: #1A237E; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+.ct-selected-tag      { font-size: 10px; font-weight: 600; background: #FFF3E0; color: #E65100; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
 .ct-row--yours        { background: #E8EAF6; }
+.ct-row--selected     { background: #FFF3E0; outline: 1.5px solid #EA580C; outline-offset: -1.5px; }
+.ct-row--clickable    { cursor: pointer; }
+.ct-row--clickable:hover:not(.ct-row--yours) { background: #F5F5F5; }
 .type-badge           { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
 .type-badge--cu       { background: #E3F2FD; color: #01579B; }
 .type-badge--bank     { background: var(--bg-gray); color: #424242; }

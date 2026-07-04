@@ -150,6 +150,9 @@ export default function CompetitorTable({
   token,
   // optional: controlled metric from parent (e.g. map sidebar)
   defaultMetric = 'deposits',
+  // optional: selected competitor ID (charter_or_cert string) — controlled by parent
+  selectedCompetitor = null,
+  onSelectCompetitor = null,
 }) {
   const [activeMetric, setActiveMetric] = useState(defaultMetric);
   const [sortCol,      setSortCol]      = useState('market_share');
@@ -280,20 +283,29 @@ export default function CompetitorTable({
             </thead>
             <tbody>
               {sorted.map((row, idx) => {
-                const isYours = myId && row.charter_or_cert === myId;
+                const isYours    = myId && row.charter_or_cert === myId;
+                const isSelected = selectedCompetitor === row.charter_or_cert;
+                const canSelect  = !isYours && onSelectCompetitor;
                 return (
                   <tr
                     key={row.charter_or_cert}
-                    className={`
-                      ct-row
-                      ct-row--${row.institution_type}
-                      ${isYours ? 'ct-row--yours' : ''}
-                    `.trim()}
+                    className={[
+                      'ct-row',
+                      `ct-row--${row.institution_type}`,
+                      isYours    ? 'ct-row--yours'    : '',
+                      isSelected ? 'ct-row--selected' : '',
+                      canSelect  ? 'ct-row--clickable' : '',
+                    ].filter(Boolean).join(' ')}
+                    onClick={canSelect
+                      ? () => onSelectCompetitor(isSelected ? null : row.charter_or_cert)
+                      : undefined}
+                    title={canSelect ? (isSelected ? 'Click to deselect' : 'Click to highlight on map') : undefined}
                   >
                     <td className="col-rank">{idx + 1}</td>
                     <td className="ct-name">
                       {row.institution_name}
-                      {isYours && <span className="ct-yours-tag">Your institution</span>}
+                      {isYours    && <span className="ct-yours-tag">Your institution</span>}
+                      {isSelected && <span className="ct-selected-tag">Highlighted</span>}
                     </td>
                     <td><TypeBadge type={row.institution_type} /></td>
                     <td className="numeric">{fmtValue(row.metric_value, activeTab.format)}</td>
