@@ -356,7 +356,6 @@ function MsaSearchInput({ geoId, onGeoIdChange, token }) {
   function handleSelect(cbsa) {
     setDisplayText(cbsa.cbsa_title);
     setQuery('');
-    setResults([]);
     setOpen(false);
     onGeoIdChange(cbsa.cbsa_code);
   }
@@ -611,23 +610,6 @@ export default function MarketMap({ charterNumber, token }) {
     [heatmapCounties, competitorCounties, selectedCompId],
   );
 
-  const mapContainerCb = useCallback(el => { mapContainerRef.current = el; }, []);
-  useMapLibre(mapContainerRef, handleCountyClick, colorExpr);
-
-  useEffect(() => {
-    if (!selectedCompId?.startsWith('ncua:')) {
-      setCompetitorCounties([]);
-      return;
-    }
-    const compCharter = parseInt(selectedCompId.replace('ncua:', ''), 10);
-    fetch(`${API}/market-share/heatmap?charter_number=${compCharter}&metric=${activeMetric}&year=${year}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => d?.counties && setCompetitorCounties(d.counties))
-      .catch(() => setCompetitorCounties([]));
-  }, [selectedCompId, activeMetric, year, token]);
-
   function handleGeoTypeChange(newType) {
     setGeoType(newType);
     setGeoId('');
@@ -654,6 +636,23 @@ export default function MarketMap({ charterNumber, token }) {
   const removeFromRegion = useCallback(fips => setCustomRegion(prev => {
     const next = new Map(prev); next.delete(fips); return next;
   }), []);
+
+  const mapContainerCb = useCallback(el => { mapContainerRef.current = el; }, []);
+  useMapLibre(mapContainerRef, handleCountyClick, colorExpr);
+
+  useEffect(() => {
+    if (!selectedCompId?.startsWith('ncua:')) {
+      setCompetitorCounties([]);
+      return;
+    }
+    const compCharter = parseInt(selectedCompId.replace('ncua:', ''), 10);
+    fetch(`${API}/market-share/heatmap?charter_number=${compCharter}&metric=${activeMetric}&year=${year}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.counties && setCompetitorCounties(d.counties))
+      .catch(() => setCompetitorCounties([]));
+  }, [selectedCompId, activeMetric, year, token]);
 
   const customRegionFipsStr = [...customRegion.keys()].join(',');
 
