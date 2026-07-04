@@ -34,7 +34,7 @@ class NaNSafeJSONResponse(JSONResponse):
             separators=(",", ":"),
         ).encode("utf-8")
 
-from api.routers import alerts, market_share, onboarding, peer_comparison, query, reports
+from api.routers import alerts, geography, market_share, onboarding, peer_comparison, query, reports
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ async def health() -> dict:
     return {"status": "ok", "version": "2.0.0"}
 
 
+app.include_router(geography.router,       prefix="/geography",      tags=["geography"])
 app.include_router(market_share.router,    prefix="/market-share",   tags=["market-share"])
 app.include_router(peer_comparison.router, prefix="/peer-comparison", tags=["peer-comparison"])
 app.include_router(query.router,           prefix="/ask",             tags=["nl-query"])

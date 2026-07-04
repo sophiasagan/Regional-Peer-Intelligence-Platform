@@ -251,7 +251,89 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
   }, [colorExpr]);
 }
 
-function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange }) {
+// ── MSA city-name autocomplete ────────────────────────────────────────────────
+
+function MsaSearchInput({ geoId, onGeoIdChange, token }) {
+  const [query,       setQuery]       = useState('');
+  const [results,     setResults]     = useState([]);
+  const [displayText, setDisplayText] = useState('');
+  const [open,        setOpen]        = useState(false);
+  const containerRef = useRef(null);
+
+  // When parent clears geoId (e.g. period change), clear display text too
+  useEffect(() => { if (!geoId) { setDisplayText(''); setQuery(''); } }, [geoId]);
+
+  // Debounced search
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); setOpen(false); return; }
+    const t = setTimeout(() => {
+      fetch(`${API}/geography/msa/search?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { setResults(data); setOpen(data.length > 0); })
+        .catch(() => {});
+    }, 280);
+    return () => clearTimeout(t);
+  }, [query, token]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function handleSelect(cbsa) {
+    setDisplayText(cbsa.cbsa_title);
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+    onGeoIdChange(cbsa.cbsa_code);
+  }
+
+  function handleInput(e) {
+    setDisplayText('');
+    setQuery(e.target.value);
+    onGeoIdChange('');
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', flex: 1 }}>
+      <input
+        className="geo-id-input"
+        type="text"
+        value={displayText || query}
+        onChange={handleInput}
+        onFocus={() => query.length >= 2 && results.length > 0 && setOpen(true)}
+        placeholder="e.g. Detroit or Flint"
+        aria-label="MSA search"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        autoComplete="off"
+      />
+      {open && (
+        <div className="msa-dropdown" role="listbox">
+          {results.map(cbsa => (
+            <div
+              key={cbsa.cbsa_code}
+              className="msa-option"
+              role="option"
+              onMouseDown={() => handleSelect(cbsa)}
+            >
+              <span className="msa-option-title">{cbsa.cbsa_title}</span>
+              <span className="msa-option-code">{cbsa.cbsa_code}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, token }) {
   return (
     <div className="geo-selector">
       <div className="geo-type-tabs" role="group" aria-label="Geography type">
@@ -265,14 +347,18 @@ function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange }) {
           </button>
         ))}
       </div>
-      <input
-        className="geo-id-input"
-        type="text"
-        value={geoId}
-        onChange={e => onGeoIdChange(e.target.value)}
-        placeholder={GEO_TYPES.find(g => g.key === geoType)?.placeholder ?? ''}
-        aria-label="Geography ID"
-      />
+      {geoType === 'msa' ? (
+        <MsaSearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
+      ) : (
+        <input
+          className="geo-id-input"
+          type="text"
+          value={geoId}
+          onChange={e => onGeoIdChange(e.target.value)}
+          placeholder={GEO_TYPES.find(g => g.key === geoType)?.placeholder ?? ''}
+          aria-label="Geography ID"
+        />
+      )}
     </div>
   );
 }
@@ -418,6 +504,7 @@ export default function MarketMap({ charterNumber, token }) {
               onGeoTypeChange={handleGeoTypeChange}
               geoId={geoId}
               onGeoIdChange={setGeoId}
+              token={token}
             />
             <PeriodSelector
               period={period}

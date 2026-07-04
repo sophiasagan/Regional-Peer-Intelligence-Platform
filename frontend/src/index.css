@@ -559,6 +559,13 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .geo-tab--active    { background: #1A237E; color: #fff; border-color: #1A237E; }
 .geo-id-input       { border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 100%; }
 
+/* MSA autocomplete dropdown */
+.msa-dropdown        { position: absolute; top: 100%; left: 0; right: 0; z-index: 200; background: #fff; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.15); margin-top: 2px; max-height: 220px; overflow-y: auto; }
+.msa-option          { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; font-size: 12px; cursor: pointer; gap: 8px; }
+.msa-option:hover    { background: #EEF2FF; }
+.msa-option-title    { flex: 1; color: var(--text); }
+.msa-option-code     { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+
 /* Period selector */
 .period-selector-panel { background: #fff; border-radius: 8px; padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
 .period-row         { display: flex; align-items: center; gap: 8px; font-size: 12px; flex-wrap: wrap; }
