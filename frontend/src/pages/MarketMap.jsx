@@ -31,8 +31,9 @@ const SHARE_COLORS = [
   { threshold: 0.05, color: '#93C5FD' },
   { threshold: 0,    color: '#DBEAFE' },
 ];
-const COMPETITOR_COLOR = '#EA580C';
-const NO_DATA_COLOR    = '#E5E7EB';
+const COMPETITOR_COLOR      = '#EA580C';
+const NO_DATA_COLOR         = '#E5E7EB';
+const REGION_SELECTED_COLOR = '#C4B5FD'; // indigo-300 — selected counties with no share data
 
 function shareToColor(share) {
   for (const { threshold, color } of SHARE_COLORS) {
@@ -74,29 +75,53 @@ function useHeatmapData(charterNumber, metric, year, token) {
   return counties;
 }
 
-function buildColorExpression(heatmapCounties, competitorCounties) {
-  const competitorFips = new Set(competitorCounties.map(c => c.county_fips));
+// customRegionFips: string[] of FIPS codes in the active custom region selection.
+// Priority order:
+//   1. Competitor county  → orange
+//   2. In region, has share data → share-based blue (data wins over region marker)
+//   3. In region, no share data  → indigo (visually marks the selected county)
+//   4. No data                   → grey
+function buildColorExpression(heatmapCounties, competitorCounties, customRegionFips = []) {
+  const competitorFips  = new Set(competitorCounties.map(c => c.county_fips));
+  const regionFipsSet   = new Set(customRegionFips);
   const matchPairs = [];
   for (const county of heatmapCounties) {
     matchPairs.push(county.county_fips, county.market_share);
   }
-  if (matchPairs.length === 0) return NO_DATA_COLOR;
 
-  // MapLibre coerces numeric-looking GeoJSON string IDs (e.g. "26049") to integers
-  // internally. ['to-string', ['id']] normalises to string so match keys (strings
-  // from the API) reliably hit.
-  const idStr     = ['to-string', ['id']];
-  const shareExpr = ['match', idStr, ...matchPairs, -1];
+  // ['to-string', ['id']] normalises feature ID to string — MapLibre coerces
+  // numeric-looking GeoJSON string IDs (e.g. "26049") to integers internally.
+  const idStr = ['to-string', ['id']];
 
-  // Only emit the competitor case clause when there are actually competitors to
-  // highlight — ['in', x, ['literal', []]] can throw in some MapLibre versions.
+  // Build the share expression; fallback -1 means "no data"
+  const shareExpr = matchPairs.length > 0
+    ? ['match', idStr, ...matchPairs, -1]
+    : -1;
+
   const competitorClause = competitorFips.size > 0
     ? [['in', idStr, ['literal', [...competitorFips]]], COMPETITOR_COLOR]
     : [];
 
+  // Counties in the region but without share data should show the region colour
+  // so they're visually selected. Counties that DO have share data keep the
+  // share colour (priority: data over region marker).
+  const regionNoDataClause = regionFipsSet.size > 0
+    ? [
+        ['all',
+          ['in', idStr, ['literal', [...regionFipsSet]]],
+          ['<', shareExpr, 0],
+        ],
+        REGION_SELECTED_COLOR,
+      ]
+    : [];
+
+  // If there's no match-pairs data at all, fall through to region/no-data colours
+  if (matchPairs.length === 0 && regionFipsSet.size === 0) return NO_DATA_COLOR;
+
   return [
     'case',
     ...competitorClause,
+    ...regionNoDataClause,
     ['<', shareExpr, 0], NO_DATA_COLOR,
     ['step', shareExpr,
       SHARE_COLORS[3].color,
@@ -543,7 +568,7 @@ function PeriodSelector({ period, onPeriodChange, compareMode, comparePeriod, on
   );
 }
 
-function ColorLegend({ metric }) {
+function ColorLegend({ metric, showRegion }) {
   return (
     <div className="color-legend">
       <div className="legend-title">{METRIC_LABELS[metric] ?? metric} Share</div>
@@ -560,6 +585,12 @@ function ColorLegend({ metric }) {
             <span className="legend-label">{label}</span>
           </div>
         ))}
+        {showRegion && (
+          <div className="legend-row">
+            <span className="legend-swatch" style={{ backgroundColor: REGION_SELECTED_COLOR }} />
+            <span className="legend-label">Custom region</span>
+          </div>
+        )}
         <div className="legend-row">
           <span className="legend-swatch" style={{ backgroundColor: COMPETITOR_COLOR }} />
           <span className="legend-label">Selected competitor</span>
@@ -606,8 +637,14 @@ export default function MarketMap({ charterNumber, token }) {
   const [competitorCounties, setCompetitorCounties] = useState([]);
 
   const colorExpr = useMemo(
-    () => buildColorExpression(heatmapCounties, selectedCompId ? competitorCounties : []),
-    [heatmapCounties, competitorCounties, selectedCompId],
+    () => buildColorExpression(
+      heatmapCounties,
+      selectedCompId ? competitorCounties : [],
+      geoType === 'custom_region' ? [...customRegion.keys()] : [],
+    ),
+    // customRegionFipsStr tracks actual key changes without re-running on every Map mutation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [heatmapCounties, competitorCounties, selectedCompId, geoType, customRegionFipsStr],
   );
 
   function handleGeoTypeChange(newType) {
@@ -700,7 +737,7 @@ export default function MarketMap({ charterNumber, token }) {
             </div>
           )}
 
-          <ColorLegend metric="deposits" />
+          <ColorLegend metric="deposits" showRegion={geoType === 'custom_region' && customRegion.size > 0} />
         </div>
 
         {/* Right panel (40%) */}
