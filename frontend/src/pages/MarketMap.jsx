@@ -754,7 +754,11 @@ export default function MarketMap({ charterNumber, token }) {
         return next;
       });
     } else if (geoType === 'state') {
-      const abbr = STATE_FIPS_TO_ABBR[fips.slice(0, 2)];
+      // MapLibre drops leading zeros (e.g. "05001" → integer 5001 → string "5001"),
+      // so slice(0,2) would give "50" (VT) not "05" (AR). Use floor division instead.
+      const stateFipsInt = Math.floor(parseInt(fips, 10) / 1000);
+      const stateFipsStr = String(stateFipsInt).padStart(2, '0');
+      const abbr = STATE_FIPS_TO_ABBR[stateFipsStr];
       if (abbr) setGeoId(abbr);
     } else if (geoType === 'county') {
       setSelectedCounty({ fips, name });
