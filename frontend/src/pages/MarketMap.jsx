@@ -636,6 +636,8 @@ export default function MarketMap({ charterNumber, token }) {
   const heatmapCounties = useHeatmapData(charterNumber, 'deposits', year, token);
   const [competitorCounties, setCompetitorCounties] = useState([]);
 
+  const customRegionFipsStr = [...customRegion.keys()].join(',');
+
   const colorExpr = useMemo(
     () => buildColorExpression(
       heatmapCounties,
@@ -690,8 +692,6 @@ export default function MarketMap({ charterNumber, token }) {
       .then(d => d?.counties && setCompetitorCounties(d.counties))
       .catch(() => setCompetitorCounties([]));
   }, [selectedCompId, activeMetric, year, token]);
-
-  const customRegionFipsStr = [...customRegion.keys()].join(',');
 
   const rightGeoType =
     geoType === 'custom_region' ? 'custom_region' :
