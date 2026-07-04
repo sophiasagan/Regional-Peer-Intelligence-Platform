@@ -17,6 +17,35 @@ router = APIRouter()
 DB_URL = os.environ.get("DATABASE_URL")
 
 
+@router.get("/county/search")
+async def search_county(q: str = Query(..., min_length=2, max_length=100)):
+    """Return up to 15 counties whose name contains the query string.
+
+    Searches fdic_deposits for county_name ILIKE match.
+    Returns county_fips, county_name, state_code sorted by name.
+    """
+    engine = get_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT DISTINCT county_fips, county_name, state_code "
+                    "FROM fdic_deposits "
+                    "WHERE LOWER(county_name) LIKE LOWER(:q) "
+                    "  AND county_fips IS NOT NULL AND county_fips <> '' "
+                    "ORDER BY county_name, state_code "
+                    "LIMIT 15"
+                ),
+                {"q": f"%{q}%"},
+            ).mappings().all()
+        return [
+            {"county_fips": r["county_fips"], "county_name": r["county_name"], "state_code": r["state_code"]}
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+
 @router.get("/msa/search")
 async def search_msa(q: str = Query(..., min_length=2, max_length=100)):
     """Return up to 10 CBSAs whose title contains the query string.

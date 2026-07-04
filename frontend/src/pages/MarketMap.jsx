@@ -251,31 +251,96 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
   }, [colorExpr]);
 }
 
-// ── MSA city-name autocomplete ────────────────────────────────────────────────
+// ── Shared autocomplete hook ──────────────────────────────────────────────────
 
-function MsaSearchInput({ geoId, onGeoIdChange, token }) {
+function useGeoSearch(endpoint, query, token) {
+  const [results, setResults] = useState([]);
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); return; }
+    const t = setTimeout(() => {
+      fetch(`${API}${endpoint}?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(setResults)
+        .catch(() => {});
+    }, 280);
+    return () => clearTimeout(t);
+  }, [endpoint, query, token]);
+  return results;
+}
+
+// ── County search autocomplete ────────────────────────────────────────────────
+
+function CountySearchInput({ geoId, onGeoIdChange, token }) {
   const [query,       setQuery]       = useState('');
-  const [results,     setResults]     = useState([]);
   const [displayText, setDisplayText] = useState('');
   const [open,        setOpen]        = useState(false);
   const containerRef = useRef(null);
 
-  // When parent clears geoId (e.g. period change), clear display text too
   useEffect(() => { if (!geoId) { setDisplayText(''); setQuery(''); } }, [geoId]);
 
-  // Debounced search
+  const results = useGeoSearch('/geography/county/search', query, token);
+  useEffect(() => { setOpen(results.length > 0); }, [results]);
+
   useEffect(() => {
-    if (query.length < 2) { setResults([]); setOpen(false); return; }
-    const t = setTimeout(() => {
-      fetch(`${API}/geography/msa/search?q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => r.ok ? r.json() : [])
-        .then(data => { setResults(data); setOpen(data.length > 0); })
-        .catch(() => {});
-    }, 280);
-    return () => clearTimeout(t);
-  }, [query, token]);
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function handleSelect(county) {
+    setDisplayText(`${county.county_name}, ${county.state_code}`);
+    setQuery('');
+    setOpen(false);
+    onGeoIdChange(county.county_fips);
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', flex: 1 }}>
+      <input
+        className="geo-id-input"
+        type="text"
+        value={displayText || query}
+        onChange={e => { setDisplayText(''); setQuery(e.target.value); onGeoIdChange(''); }}
+        onFocus={() => query.length >= 2 && results.length > 0 && setOpen(true)}
+        placeholder="e.g. Genesee or Oakland"
+        aria-label="County search"
+        autoComplete="off"
+      />
+      {open && (
+        <div className="msa-dropdown" role="listbox">
+          {results.map(c => (
+            <div
+              key={c.county_fips}
+              className="msa-option"
+              role="option"
+              onMouseDown={() => handleSelect(c)}
+            >
+              <span className="msa-option-title">{c.county_name}, {c.state_code}</span>
+              <span className="msa-option-code">{c.county_fips}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MSA city-name autocomplete ────────────────────────────────────────────────
+
+function MsaSearchInput({ geoId, onGeoIdChange, token }) {
+  const [query,       setQuery]       = useState('');
+  const [displayText, setDisplayText] = useState('');
+  const [open,        setOpen]        = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => { if (!geoId) { setDisplayText(''); setQuery(''); } }, [geoId]);
+
+  const results = useGeoSearch('/geography/msa/search', query, token);
+  useEffect(() => { setOpen(results.length > 0); }, [results]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -347,7 +412,9 @@ function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, tok
           </button>
         ))}
       </div>
-      {geoType === 'msa' ? (
+      {geoType === 'county' ? (
+        <CountySearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
+      ) : geoType === 'msa' ? (
         <MsaSearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
       ) : (
         <input
