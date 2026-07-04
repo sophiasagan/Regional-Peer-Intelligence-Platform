@@ -130,11 +130,15 @@ function buildColorExpression(heatmapCounties, competitorCounties, stateFips = n
     : [];
 
   // In-state counties with no data get a distinct light-blue fill so the state
-  // boundary is visible. ['slice', idStr, 0, 2] extracts the 2-digit state FIPS.
-  const stateNoDataClause = stateFips
+  // boundary is visible.
+  // floor(county_fips_int / 1000) = state FIPS as integer — avoids leading-zero
+  // truncation bug: MapLibre coerces "05001" → 5001, so slice("5001",0,2)="50"
+  // would falsely match Vermont. Integer division: floor(5001/1000)=5 ≠ 50.
+  const stateFipsExpr = ['floor', ['/', ['to-number', ['id']], 1000]];
+  const stateNoDataClause = stateFips != null
     ? [
         ['all',
-          ['==', ['slice', idStr, 0, 2], stateFips],
+          ['==', stateFipsExpr, stateFips],
           ['<', shareExpr, 0],
         ],
         STATE_NO_DATA_COLOR,
@@ -157,13 +161,15 @@ function buildColorExpression(heatmapCounties, competitorCounties, stateFips = n
 
 // Returns a MapLibre line-width expression for the county-region-outline layer.
 // In custom_region mode: 3px border on each selected county.
-// In state mode: 2px border on every county whose FIPS starts with stateFips.
+// In state mode: 2px border on every county in the state.
+// Uses floor(fips_int / 1000) to derive state — avoids leading-zero truncation
+// that occurs when MapLibre coerces string IDs like "05001" to integer 5001.
 function buildOutlineExpr(customRegionFips, stateFips) {
   if (customRegionFips && customRegionFips.length > 0) {
     return ['case', ['in', ['to-string', ['id']], ['literal', customRegionFips]], 3, 0];
   }
-  if (stateFips) {
-    return ['case', ['==', ['slice', ['to-string', ['id']], 0, 2], stateFips], 2, 0];
+  if (stateFips != null) {
+    return ['case', ['==', ['floor', ['/', ['to-number', ['id']], 1000]], stateFips], 2, 0];
   }
   return 0;
 }
@@ -701,10 +707,12 @@ export default function MarketMap({ charterNumber, token }) {
 
   const customRegionFipsStr = [...customRegion.keys()].join(',');
 
-  // 2-digit state FIPS derived from the selected state abbreviation
+  // State FIPS as integer — used in MapLibre floor(fips/1000) expressions.
+  // Returns null when not in state mode or no state selected.
   const stateFips = useMemo(() => {
     if (geoType !== 'state' || !geoId) return null;
-    return Object.entries(STATE_FIPS_TO_ABBR).find(([, abbr]) => abbr === geoId)?.[0] ?? null;
+    const fipsStr = Object.entries(STATE_FIPS_TO_ABBR).find(([, abbr]) => abbr === geoId)?.[0];
+    return fipsStr != null ? parseInt(fipsStr, 10) : null;
   }, [geoType, geoId]);
 
   const colorExpr = useMemo(
