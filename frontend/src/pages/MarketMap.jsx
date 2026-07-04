@@ -45,8 +45,37 @@ function shareToColor(share) {
 const GEO_TYPES = [
   { key: 'county',        label: 'County',        placeholder: 'e.g. 26049 (Genesee MI)' },
   { key: 'msa',           label: 'MSA',           placeholder: 'e.g. 19820 (Detroit)' },
-  { key: 'state',         label: 'State',         placeholder: 'e.g. MI' },
+  { key: 'state',         label: 'State',         placeholder: 'Select a state' },
   { key: 'custom_region', label: 'Custom Region', placeholder: 'Enter county FIPS list' },
+];
+
+// Maps 2-digit state FIPS (from county FIPS prefix) → 2-letter state abbreviation.
+// Used to derive state from a clicked county feature.
+const STATE_FIPS_TO_ABBR = {
+  '01':'AL','02':'AK','04':'AZ','05':'AR','06':'CA','08':'CO','09':'CT',
+  '10':'DE','11':'DC','12':'FL','13':'GA','15':'HI','16':'ID','17':'IL',
+  '18':'IN','19':'IA','20':'KS','21':'KY','22':'LA','23':'ME','24':'MD',
+  '25':'MA','26':'MI','27':'MN','28':'MS','29':'MO','30':'MT','31':'NE',
+  '32':'NV','33':'NH','34':'NJ','35':'NM','36':'NY','37':'NC','38':'ND',
+  '39':'OH','40':'OK','41':'OR','42':'PA','44':'RI','45':'SC','46':'SD',
+  '47':'TN','48':'TX','49':'UT','50':'VT','51':'VA','53':'WA','54':'WV',
+  '55':'WI','56':'WY',
+};
+
+const US_STATES = [
+  ['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],
+  ['CA','California'],['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],
+  ['DC','DC'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],
+  ['IL','Illinois'],['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],
+  ['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],
+  ['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],
+  ['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],
+  ['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],
+  ['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],
+  ['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],
+  ['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],
+  ['VT','Vermont'],['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],
+  ['WI','Wisconsin'],['WY','Wyoming'],
 ];
 
 const METRIC_LABELS = {
@@ -501,6 +530,22 @@ function CustomRegionInput({ selectedMap, onAdd, onRemove, token }) {
   );
 }
 
+function StateSelectInput({ geoId, onGeoIdChange }) {
+  return (
+    <select
+      className="geo-id-input"
+      value={geoId}
+      onChange={e => onGeoIdChange(e.target.value)}
+      aria-label="Select state"
+    >
+      <option value="">Select a state…</option>
+      {US_STATES.map(([abbr, name]) => (
+        <option key={abbr} value={abbr}>{abbr} — {name}</option>
+      ))}
+    </select>
+  );
+}
+
 function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, token,
                               customRegion, onAddToRegion, onRemoveFromRegion }) {
   return (
@@ -520,6 +565,8 @@ function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, tok
         <CountySearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
       ) : geoType === 'msa' ? (
         <MsaSearchInput geoId={geoId} onGeoIdChange={onGeoIdChange} token={token} />
+      ) : geoType === 'state' ? (
+        <StateSelectInput geoId={geoId} onGeoIdChange={onGeoIdChange} />
       ) : geoType === 'custom_region' ? (
         <CustomRegionInput
           selectedMap={customRegion}
@@ -527,16 +574,7 @@ function GeographySelector({ geoType, onGeoTypeChange, geoId, onGeoIdChange, tok
           onRemove={onRemoveFromRegion}
           token={token}
         />
-      ) : (
-        <input
-          className="geo-id-input"
-          type="text"
-          value={geoId}
-          onChange={e => onGeoIdChange(e.target.value)}
-          placeholder={GEO_TYPES.find(g => g.key === geoType)?.placeholder ?? ''}
-          aria-label="Geography ID"
-        />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -664,7 +702,11 @@ export default function MarketMap({ charterNumber, token }) {
     setCustomRegion(new Map());
   }
 
-  // Map click routes to: county selection (default) or custom region toggle
+  // Map click routes by geoType:
+  //   county       → select that county for the right panel
+  //   state        → derive state abbreviation from county FIPS prefix, set geoId
+  //   custom_region→ toggle county in/out of the region
+  //   msa          → no-op (user picks MSA from the search input)
   const handleCountyClick = useCallback(({ fips, name }) => {
     if (geoType === 'custom_region') {
       setCustomRegion(prev => {
@@ -672,7 +714,10 @@ export default function MarketMap({ charterNumber, token }) {
         if (next.has(fips)) next.delete(fips); else next.set(fips, name);
         return next;
       });
-    } else {
+    } else if (geoType === 'state') {
+      const abbr = STATE_FIPS_TO_ABBR[fips.slice(0, 2)];
+      if (abbr) setGeoId(abbr);
+    } else if (geoType === 'county') {
       setSelectedCounty({ fips, name });
     }
   }, [geoType]);
@@ -703,10 +748,12 @@ export default function MarketMap({ charterNumber, token }) {
 
   const rightGeoType =
     geoType === 'custom_region' ? 'custom_region' :
-    selectedCounty ? 'county' : geoType;
+    (geoType === 'county' && selectedCounty) ? 'county' :
+    geoType;
   const rightGeoId =
     geoType === 'custom_region' ? customRegionFipsStr :
-    selectedCounty ? selectedCounty.fips : geoId;
+    (geoType === 'county' && selectedCounty) ? selectedCounty.fips :
+    geoId;
 
   return (
     <div className="market-map-page">
@@ -738,7 +785,7 @@ export default function MarketMap({ charterNumber, token }) {
 
           <div ref={mapContainerCb} className="mapbox-container" aria-label="Market share map" />
 
-          {selectedCounty && (
+          {geoType === 'county' && selectedCounty && (
             <div className="selected-county-label">
               Viewing: <strong>{selectedCounty.name}</strong> ({selectedCounty.fips})
               <button className="clear-btn" onClick={() => setSelectedCounty(null)} title="Clear">×</button>
@@ -750,7 +797,7 @@ export default function MarketMap({ charterNumber, token }) {
 
         {/* Right panel (40%) */}
         <div className="map-right-panel">
-          {selectedCounty && (
+          {geoType === 'county' && selectedCounty && (
             <div className="panel-geo-header">
               <h2 className="panel-title">{selectedCounty.name}</h2>
               <span className="panel-fips">FIPS {selectedCounty.fips}</span>
