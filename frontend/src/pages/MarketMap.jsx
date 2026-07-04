@@ -64,8 +64,11 @@ function useHeatmapData(charterNumber, metric, year, token) {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
-      .then(d => d?.counties && setCounties(d.counties))
-      .catch(() => {});
+      .then(d => {
+        console.log('[heatmap] response:', d?.counties?.length ?? 0, 'counties', d?.counties?.[0]);
+        if (d?.counties) setCounties(d.counties);
+      })
+      .catch(err => console.error('[heatmap] fetch failed:', err));
   }, [charterNumber, metric, year, token]);
 
   return counties;
@@ -79,13 +82,21 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
   }
   if (matchPairs.length === 0) return NO_DATA_COLOR;
 
-  // ['id'] reads the feature's top-level id (FIPS string in Plotly GeoJSON).
-  // ['get', 'id'] would read properties.id — which doesn't exist — and always miss.
-  const shareExpr = ['match', ['id'], ...matchPairs, -1];
+  // MapLibre coerces numeric-looking GeoJSON string IDs (e.g. "26049") to integers
+  // internally. ['to-string', ['id']] normalises to string so match keys (strings
+  // from the API) reliably hit.
+  const idStr     = ['to-string', ['id']];
+  const shareExpr = ['match', idStr, ...matchPairs, -1];
+
+  // Only emit the competitor case clause when there are actually competitors to
+  // highlight — ['in', x, ['literal', []]] can throw in some MapLibre versions.
+  const competitorClause = competitorFips.size > 0
+    ? [['in', idStr, ['literal', [...competitorFips]]], COMPETITOR_COLOR]
+    : [];
+
   return [
     'case',
-    ['in', ['id'], ['literal', [...competitorFips]]],
-    COMPETITOR_COLOR,
+    ...competitorClause,
     ['<', shareExpr, 0], NO_DATA_COLOR,
     ['step', shareExpr,
       SHARE_COLORS[3].color,
@@ -166,7 +177,9 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
       // Apply whichever colorExpr arrived while the style was loading
       try {
         map.setPaintProperty('county-fill', 'fill-color', colorExprRef.current);
-      } catch (_) {}
+      } catch (err) {
+        console.error('[MarketMap] setPaintProperty on load failed:', err);
+      }
 
       // Helper: extract FIPS from a clicked feature
       // Plotly GeoJSON stores FIPS as the top-level "id" string on each feature.
@@ -232,7 +245,9 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
     if (!loadedRef.current || !mapRef.current) return;
     try {
       mapRef.current.setPaintProperty('county-fill', 'fill-color', colorExpr);
-    } catch (_) {}
+    } catch (err) {
+      console.error('[MarketMap] setPaintProperty update failed:', err, colorExpr);
+    }
   }, [colorExpr]);
 }
 
