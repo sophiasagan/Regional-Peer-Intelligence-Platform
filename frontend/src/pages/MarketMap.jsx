@@ -33,7 +33,8 @@ const SHARE_COLORS = [
 ];
 const COMPETITOR_COLOR      = '#EA580C';
 const NO_DATA_COLOR         = '#E5E7EB';
-const REGION_SELECTED_COLOR = '#C4B5FD'; // indigo-300 — selected counties with no share data
+const REGION_SELECTED_COLOR = '#C4B5FD'; // indigo-300 — custom region selected counties
+const STATE_NO_DATA_COLOR   = '#BFDBFE'; // blue-200 — in-state counties with no share data
 
 function shareToColor(share) {
   for (const { threshold, color } of SHARE_COLORS) {
@@ -104,7 +105,10 @@ function useHeatmapData(charterNumber, metric, year, token) {
   return counties;
 }
 
-function buildColorExpression(heatmapCounties, competitorCounties) {
+// stateFips: 2-digit state FIPS string (e.g. '26') — when set, in-state counties
+// with no share data get STATE_NO_DATA_COLOR instead of plain grey so the state
+// shape is visible even where the institution has no deposits.
+function buildColorExpression(heatmapCounties, competitorCounties, stateFips = null) {
   const competitorFips = new Set(competitorCounties.map(c => c.county_fips));
   const matchPairs = [];
   for (const county of heatmapCounties) {
@@ -115,7 +119,7 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
   // numeric-looking GeoJSON string IDs (e.g. "26049") to integers internally.
   const idStr = ['to-string', ['id']];
 
-  if (matchPairs.length === 0 && competitorFips.size === 0) return NO_DATA_COLOR;
+  if (matchPairs.length === 0 && competitorFips.size === 0 && !stateFips) return NO_DATA_COLOR;
 
   const shareExpr = matchPairs.length > 0
     ? ['match', idStr, ...matchPairs, -1]
@@ -125,9 +129,22 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
     ? [['in', idStr, ['literal', [...competitorFips]]], COMPETITOR_COLOR]
     : [];
 
+  // In-state counties with no data get a distinct light-blue fill so the state
+  // boundary is visible. ['slice', idStr, 0, 2] extracts the 2-digit state FIPS.
+  const stateNoDataClause = stateFips
+    ? [
+        ['all',
+          ['==', ['slice', idStr, 0, 2], stateFips],
+          ['<', shareExpr, 0],
+        ],
+        STATE_NO_DATA_COLOR,
+      ]
+    : [];
+
   return [
     'case',
     ...competitorClause,
+    ...stateNoDataClause,
     ['<', shareExpr, 0], NO_DATA_COLOR,
     ['step', shareExpr,
       SHARE_COLORS[3].color,
@@ -138,10 +155,17 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
   ];
 }
 
-// Returns a MapLibre line-width expression: 3px for counties in the region, 0 otherwise.
-function buildRegionOutlineExpr(customRegionFips) {
-  if (!customRegionFips || customRegionFips.length === 0) return 0;
-  return ['case', ['in', ['to-string', ['id']], ['literal', customRegionFips]], 3, 0];
+// Returns a MapLibre line-width expression for the county-region-outline layer.
+// In custom_region mode: 3px border on each selected county.
+// In state mode: 2px border on every county whose FIPS starts with stateFips.
+function buildOutlineExpr(customRegionFips, stateFips) {
+  if (customRegionFips && customRegionFips.length > 0) {
+    return ['case', ['in', ['to-string', ['id']], ['literal', customRegionFips]], 3, 0];
+  }
+  if (stateFips) {
+    return ['case', ['==', ['slice', ['to-string', ['id']], 0, 2], stateFips], 2, 0];
+  }
+  return 0;
 }
 
 function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) {
@@ -677,22 +701,29 @@ export default function MarketMap({ charterNumber, token }) {
 
   const customRegionFipsStr = [...customRegion.keys()].join(',');
 
+  // 2-digit state FIPS derived from the selected state abbreviation
+  const stateFips = useMemo(() => {
+    if (geoType !== 'state' || !geoId) return null;
+    return Object.entries(STATE_FIPS_TO_ABBR).find(([, abbr]) => abbr === geoId)?.[0] ?? null;
+  }, [geoType, geoId]);
+
   const colorExpr = useMemo(
     () => buildColorExpression(
       heatmapCounties,
       selectedCompId ? competitorCounties : [],
+      stateFips,
     ),
-    [heatmapCounties, competitorCounties, selectedCompId],
+    [heatmapCounties, competitorCounties, selectedCompId, stateFips],
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const regionOutlineExpr = useMemo(
-    () => buildRegionOutlineExpr(
-      geoType === 'custom_region' ? [...customRegion.keys()] : [],
+    () => buildOutlineExpr(
+      geoType === 'custom_region' ? [...customRegion.keys()] : null,
+      geoType === 'state' ? stateFips : null,
     ),
     // customRegionFipsStr as stable dep — Map identity changes on every update
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geoType, customRegionFipsStr],
+    [geoType, customRegionFipsStr, stateFips],
   );
 
   function handleGeoTypeChange(newType) {
