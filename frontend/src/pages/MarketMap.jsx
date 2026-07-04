@@ -79,10 +79,12 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
   }
   if (matchPairs.length === 0) return NO_DATA_COLOR;
 
-  const shareExpr = ['match', ['get', 'id'], ...matchPairs, -1];
+  // ['id'] reads the feature's top-level id (FIPS string in Plotly GeoJSON).
+  // ['get', 'id'] would read properties.id — which doesn't exist — and always miss.
+  const shareExpr = ['match', ['id'], ...matchPairs, -1];
   return [
     'case',
-    ['in', ['get', 'id'], ['literal', [...competitorFips]]],
+    ['in', ['id'], ['literal', [...competitorFips]]],
     COMPETITOR_COLOR,
     ['<', shareExpr, 0], NO_DATA_COLOR,
     ['step', shareExpr,
@@ -95,8 +97,12 @@ function buildColorExpression(heatmapCounties, competitorCounties) {
 }
 
 function useMapLibre(containerRef, onCountyClick, colorExpr) {
-  const mapRef    = useRef(null);
-  const loadedRef = useRef(false);
+  const mapRef       = useRef(null);
+  const loadedRef    = useRef(false);
+  // Always holds the latest colorExpr so the map.on('load') closure can apply it
+  // even when heatmap data arrives before the style finishes loading.
+  const colorExprRef = useRef(colorExpr);
+  colorExprRef.current = colorExpr;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -156,6 +162,11 @@ function useMapLibre(containerRef, onCountyClick, colorExpr) {
       });
 
       loadedRef.current = true;
+
+      // Apply whichever colorExpr arrived while the style was loading
+      try {
+        map.setPaintProperty('county-fill', 'fill-color', colorExprRef.current);
+      } catch (_) {}
 
       // Helper: extract FIPS from a clicked feature
       // Plotly GeoJSON stores FIPS as the top-level "id" string on each feature.
