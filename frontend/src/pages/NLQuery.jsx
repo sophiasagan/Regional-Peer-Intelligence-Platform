@@ -6,8 +6,17 @@
  */
 
 import React, { useState, useRef } from 'react';
+import PeerBandChart from '../components/PeerBandChart';
 
 const API = import.meta.env.VITE_API_URL ?? '';
+
+const PERIOD_OPTIONS = [
+  '2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1',
+  '2024Q4', '2024Q3', '2024Q2', '2024Q1', '2023Q4',
+];
+
+// Metrics that are coverage ratios (1.2x), not percentages
+const RATIO_UNIT_METRICS = new Set(['alll_coverage']);
 
 const EXAMPLE_QUESTIONS = [
   'How does our net charge-off ratio compare to regional peers?',
@@ -151,12 +160,9 @@ function MarkdownBlock({ source }) {
 
 // ── Metric display helpers ────────────────────────────────────────────────────
 
-// Metrics stored as ratios/coverage multiples — NOT percentages
-const RATIO_METRICS = new Set(['alll_coverage']);
-
 function fmtMetric(v, metricKey) {
   if (v == null) return '—';
-  if (RATIO_METRICS.has(metricKey)) return `${v.toFixed(3)}x`;
+  if (RATIO_UNIT_METRICS.has(metricKey)) return `${v.toFixed(3)}x`;
   // Rate/ratio metrics are stored as decimals (0.012 = 1.2%)
   if (Math.abs(v) < 10) return `${(v * 100).toFixed(3)}%`;
   // Assume large values are raw dollar amounts
@@ -248,12 +254,9 @@ export default function NLQuery({ charterNumber, token, defaultPeriod = '2026Q1'
           <div className="nl-form-controls">
             <label className="nl-label">
               Period
-              <input
-                type="text"
-                className="nl-period-input"
-                value={period}
-                onChange={e => setPeriod(e.target.value)}
-              />
+              <select className="nl-select" value={period} onChange={e => setPeriod(e.target.value)}>
+                {PERIOD_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
             </label>
             <label className="nl-label">
               Peer group
@@ -290,6 +293,21 @@ export default function NLQuery({ charterNumber, token, defaultPeriod = '2026Q1'
               {response.matched_metric && (
                 <code className="nl-metric-code">{response.matched_metric}</code>
               )}
+            </div>
+          )}
+
+          {/* Peer band chart — shown when metric is identified */}
+          {response.matched_metric && (
+            <div className="nl-chart-wrap">
+              <PeerBandChart
+                metric={response.matched_metric}
+                charterNumber={charterNumber}
+                period={period}
+                peerGroup={peerGroup}
+                token={token}
+                nPeriods={12}
+                unit={RATIO_UNIT_METRICS.has(response.matched_metric) ? 'x' : '%'}
+              />
             </div>
           )}
 
