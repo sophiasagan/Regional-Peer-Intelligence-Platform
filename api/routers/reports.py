@@ -95,7 +95,7 @@ async def generate_quarterly_report(
         period=period,
         generated_at=datetime.now(timezone.utc).isoformat(),
         filename=output_path.name,
-        download_url=f"/reports/download/{report_id}",
+        download_url=f"/reports/download/{output_path.name}",
     )
 
 
@@ -122,19 +122,19 @@ async def generate_credit_quality_report(
         period=period,
         generated_at=datetime.now(timezone.utc).isoformat(),
         filename=output_path.name,
-        download_url=f"/reports/download/{report_id}",
+        download_url=f"/reports/download/{output_path.name}",
     )
 
 
-@router.get("/download/{report_id}")
-async def download_report(request: Request, report_id: str):
-    # TODO: look up filename from report_id in a reports table
-    # For now, scan REPORTS_DIR for a file matching the report_id prefix
-    matches = list(REPORTS_DIR.glob(f"*{report_id}*"))
-    if not matches:
-        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+@router.get("/download/{filename:path}")
+async def download_report(request: Request, filename: str):
+    # Strip directory components to prevent path traversal
+    safe_name = Path(filename).name
+    target = REPORTS_DIR / safe_name
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"Report {safe_name!r} not found")
     return FileResponse(
-        path=str(matches[0]),
+        path=str(target),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename=matches[0].name,
+        filename=safe_name,
     )
