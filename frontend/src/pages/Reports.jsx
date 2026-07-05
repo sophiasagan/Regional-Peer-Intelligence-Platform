@@ -146,8 +146,8 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
   const peerCount  = data?.peer_count;
   const metrics    = data?.metrics ?? [];
 
-  // Pull key metrics for preview
-  function findMetric(key) { return metrics.find(m => m.metric_key === key); }
+  // Pull key metrics for preview — backend field is metric_name, not metric_key
+  function findMetric(key) { return metrics.find(m => m.metric_name === key); }
 
   const delinq     = findMetric('delinq_rate_total');
   const chargeoff  = findMetric('chargeoff_rate_total_annualized');
@@ -220,11 +220,11 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
               <div className="rp-preview-metrics">
                 {KEY_METRICS.map(m => (
                   <MetricPreviewRow
-                    key={m.metric_key}
-                    label={m.callahan_label ?? m.metric_key}
+                    key={m.metric_name}
+                    label={m.callahan_label ?? m.metric_name}
                     value={m.institution_value}
                     stars={m.stars}
-                    peerMedian={m.peer_distribution?.p50}
+                    peerMedian={m.peer_median}
                     isAdverse={m.is_adverse}
                   />
                 ))}
