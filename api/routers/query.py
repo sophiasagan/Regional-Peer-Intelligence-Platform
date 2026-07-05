@@ -314,8 +314,9 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
                     "confirmation":      confirmation,
                 }
                 sources.append(f"NCUA 5300 {query_req.period}")
-        except Exception:
-            pass
+        except Exception as _exc:
+            import logging
+            logging.getLogger(__name__).warning("NL query data fetch failed: %s", _exc)
 
     # ── Build user message ─────────────────────────────────────────────────────
     context_parts = []
@@ -332,19 +333,26 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
 
     user_msg = "\n".join(context_parts) + f"\n\nQuestion: {query_req.question}"
     if data:
-        inst_fmt = f"{data['institution_value'] * 100:.3f}%" if data["institution_value"] is not None else "N/A"
-        med_fmt  = (
-            f"{data['peer_distribution']['p50'] * 100:.3f}%"
-            if data["peer_distribution"].get("p50") is not None
-            else "N/A"
-        )
-        pct_str  = f"{data['percentile_rank']:.1f}th percentile" if data["percentile_rank"] is not None else "N/A"
+        # Format raw values — rate metrics are stored as decimals (0.012 = 1.2%),
+        # dollar/count metrics are stored as actual amounts. Pass both to Claude
+        # so it can describe them accurately without hardcoded formatting.
+        iv   = data["institution_value"]
+        p50  = data["peer_distribution"].get("p50")
+        p10  = data["peer_distribution"].get("p10")
+        p90  = data["peer_distribution"].get("p90")
+        pct_str = f"{data['percentile_rank']:.1f}th percentile" if data["percentile_rank"] is not None else "N/A"
+        label   = _P76_TO_CALLAHAN_DISPLAY.get(p76_metric, p76_metric)
         user_msg += (
-            f"\n\nData:\n"
-            f"  Institution {_P76_TO_CALLAHAN_DISPLAY.get(p76_metric, p76_metric)}: {inst_fmt}\n"
-            f"  Peer median: {med_fmt}\n"
-            f"  Percentile rank: {pct_str} ({data['stars'] or '—'} stars)\n"
-            f"  Peer count: {data['peer_distribution']['n']}"
+            f"\n\nACTUAL DATA FROM DATABASE (use these exact figures in your answer):\n"
+            f"  Metric: {label}\n"
+            f"  Institution value (raw): {iv}\n"
+            f"  Peer median (raw):       {p50}\n"
+            f"  Peer P10 (raw):          {p10}\n"
+            f"  Peer P90 (raw):          {p90}\n"
+            f"  Percentile rank:         {pct_str}\n"
+            f"  Stars:                   {data['stars'] or '—'} / 5\n"
+            f"  Peer count:              {data['peer_distribution']['n']}\n"
+            f"Note: rate metrics are decimals (0.012 = 1.2%); dollar metrics are raw dollars."
         )
 
     # ── Call Claude ────────────────────────────────────────────────────────────
