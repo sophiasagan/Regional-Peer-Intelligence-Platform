@@ -199,36 +199,60 @@ def _red_callout(doc: Document, message: str) -> None:
 
 # ── Data loaders ──────────────────────────────────────────────────────────────
 
-def _fetch_peer_dist(metric_key: str, period: str, peer_group_id: Optional[str], engine) -> dict:
-    """Return p50 and p75 from peer_distributions table. Empty dict on miss."""
-    if not peer_group_id:
-        return {}
-    try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            row = conn.execute(
-                text("""
-                    SELECT p50 AS median, p75
-                    FROM peer_distributions
-                    WHERE metric_key = :mk AND period = :p AND peer_group_id = :pg
-                    LIMIT 1
-                """),
-                {"mk": metric_key, "p": period, "pg": str(peer_group_id)},
-            ).mappings().first()
-        return dict(row) if row else {}
-    except Exception:
-        return {}
+def _fetch_peer_dist(
+    metric_key: str,
+    period: str,
+    peer_group_id: Optional[str],
+    engine,
+    peer_charters: Optional[list] = None,
+    db_url: Optional[str] = None,
+) -> dict:
+    """Return p50 and p75 for a metric.
+
+    Tries precomputed peer_distributions first; falls back to on-the-fly
+    compute_peer_distribution() when peer_group_id is missing.
+    """
+    if peer_group_id:
+        try:
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("""
+                        SELECT p50 AS median, p75
+                        FROM peer_distributions
+                        WHERE metric_key = :mk AND period = :p AND peer_group_id = :pg
+                        LIMIT 1
+                    """),
+                    {"mk": metric_key, "p": period, "pg": str(peer_group_id)},
+                ).mappings().first()
+            if row:
+                return dict(row)
+        except Exception:
+            pass
+
+    # On-the-fly fallback using actual peer charter list
+    if peer_charters and db_url:
+        try:
+            from processing.delinquency_engine import compute_peer_distribution
+            dist = compute_peer_distribution(metric_key, peer_charters, period, db_url)
+            return {"median": dist.get("p50"), "p75": dist.get("p75")}
+        except Exception as exc:
+            logger.warning("On-the-fly peer dist failed metric=%s period=%s: %s", metric_key, period, exc)
+
+    return {}
 
 
 def _load_inst_row(charter_number: int, period: str, engine) -> dict:
     """Fetch one period of institution data. Returns {} on miss."""
     try:
         from sqlalchemy import text
+        # acct_719 (pre-CECL ALLL) is stored in all_accounts JSONB, not as a named column.
+        # Use acct_AS0048 (CECL ACL) for allowance — pull acct_719 from all_accounts below.
         with engine.connect() as conn:
             row = conn.execute(
                 text("""
                     SELECT acct_010, acct_025B, acct_041B, acct_020B,
-                           acct_AS0048, acct_719, acct_550, acct_551,
+                           acct_AS0048, acct_550, acct_551,
                            acct_385, acct_370, acct_396, acct_703A,
                            acct_386A, acct_718A5, acct_400P, acct_997,
                            acct_IS0010, acct_117, acct_671, acct_661A,
@@ -251,8 +275,12 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
                 result["all_accounts"] = {}
         elif aa is None:
             result["all_accounts"] = {}
+        # Surface pre-CECL ALLL (acct_719) from JSONB for institutions that still file it
+        aa_upper = {k.upper(): v for k, v in (result["all_accounts"] or {}).items()}
+        result.setdefault("acct_719", aa_upper.get("719") or aa_upper.get("ACCT_719"))
         return result
-    except Exception:
+    except Exception as exc:
+        logger.warning("_load_inst_row failed charter=%s period=%s: %s", charter_number, period, exc)
         return {}
 
 
@@ -275,6 +303,7 @@ def _load_trend_data(
     period: str,
     peer_group_id: Optional[str],
     db_url: Optional[str],
+    peer_charters: Optional[list] = None,
 ) -> list[dict]:
     """Return up to 8 quarters of delinquency rates (institution + peer benchmarks).
 
@@ -302,9 +331,12 @@ def _load_trend_data(
             for label, inst_key, delinq_codes, bal_cols, _ in _LOAN_TYPE_CFG[1:]:
                 row_data[inst_key] = _compute_loan_type_rate(inst, delinq_codes, bal_cols)
 
-        # Peer benchmarks
+        # Peer benchmarks — precomputed table first, on-the-fly fallback
         for _, inst_key, _, _, peer_metric_key in _LOAN_TYPE_CFG:
-            dist = _fetch_peer_dist(peer_metric_key, p, peer_group_id, engine)
+            dist = _fetch_peer_dist(
+                peer_metric_key, p, peer_group_id, engine,
+                peer_charters=peer_charters, db_url=db_url,
+            )
             row_data[f"{inst_key}_p50"] = dist.get("median")
             row_data[f"{inst_key}_p75"] = dist.get("p75")
 
@@ -1074,7 +1106,7 @@ def build_report(
         pass
 
     # ── Gather data ────────────────────────────────────────────────────────────
-    trend_data     = _load_trend_data(charter_number, period, peer_group_id, db_url)
+    trend_data     = _load_trend_data(charter_number, period, peer_group_id, db_url, peer_charters=peer_charters)
     regional_data  = _load_regional_comparison(charter_number, period, peer_charters, db_url)
     prior_data     = _load_prior_period_data(charter_number, period, db_url)
 
