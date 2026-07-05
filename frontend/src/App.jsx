@@ -54,7 +54,7 @@ export default function App() {
               <Route path="/market-map"           element={<MarketMap charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
               <Route path="/peer-comparison"      element={<PeerComparison charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
               <Route path="/query"                element={<NLQuery charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
-              <Route path="/reports"              element={<Reports />} />
+              <Route path="/reports"              element={<Reports charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
               <Route path="/onboarding/callahan"  element={<CallahanMigration />} />
               <Route path="*"                     element={<Navigate to="/credit-quality" replace />} />
             </Routes>
