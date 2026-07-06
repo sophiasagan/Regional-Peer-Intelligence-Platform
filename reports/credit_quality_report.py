@@ -73,28 +73,28 @@ _LOAN_TYPE_CFG = [
         "delinq_rate_total",
         [],                                  # computed from acct_041B / acct_025B
         [],
-        "delinq_rate_total",
+        "delinq_rate_total",                 # matches compute_ratios() output key
     ),
     (
         "Auto Loans",
         "auto_delinq_rate",
         ["DL0030", "DL0035"],                # new vehicle + used vehicle 60+ day
         ["acct_385", "acct_370"],
-        "auto_delinq_rate",
+        "delinq_rate_auto",                  # matches METRIC_LABELS / compute_ratios() key
     ),
     (
         "Credit Card",
         "credit_card_delinq_rate",
         ["DL0060"],                          # credit card 60+ day
         ["acct_396"],
-        "credit_card_delinq_rate",
+        "delinq_rate_cc",                    # matches METRIC_LABELS / compute_ratios() key
     ),
     (
         "Commercial",
         "commercial_delinq_rate",
         ["DL0070", "DL0072"],                # commercial RE + commercial non-RE 60+ day
         ["acct_718A5", "acct_400P"],
-        "commercial_delinq_rate",
+        "delinq_rate_commercial_total",      # matches compute_ratios() key
     ),
 ]
 
@@ -243,16 +243,23 @@ def _fetch_peer_dist(
 
 
 def _load_inst_row(charter_number: int, period: str, engine) -> dict:
-    """Fetch one period of institution data. Returns {} on miss."""
+    """Fetch one period of institution data. Returns {} on miss.
+
+    PostgreSQL folds unquoted identifiers to lowercase (acct_025B → acct_025b).
+    We normalise keys back to the canonical ORM-defined names so that downstream
+    code can use inst.get("acct_025B") etc. without case surprises.
+    """
     try:
         from sqlalchemy import text
-        # acct_719 (pre-CECL ALLL) is stored in all_accounts JSONB, not as a named column.
-        # Use acct_AS0048 (CECL ACL) for allowance — pull acct_719 from all_accounts below.
+        from db import institutions_quarterly as _iq
+        # Build lowercase→canonical map once from the ORM metadata
+        _case_map = {c.name.lower(): c.name for c in _iq.columns}
+
         with engine.connect() as conn:
             row = conn.execute(
                 text("""
                     SELECT acct_010, acct_025B, acct_041B, acct_020B,
-                           acct_AS0048, acct_550, acct_551,
+                           acct_AS0048, acct_719, acct_550, acct_551,
                            acct_385, acct_370, acct_396, acct_703A,
                            acct_386A, acct_718A5, acct_400P, acct_997,
                            acct_IS0010, acct_117, acct_671, acct_661A,
@@ -265,8 +272,9 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
             ).mappings().first()
         if not row:
             return {}
-        result = dict(row)
-        # Parse all_accounts JSONB (may come as str or dict)
+        # Remap lowercase PG keys → ORM canonical names (e.g. acct_025b → acct_025B)
+        result = {_case_map.get(k, k): v for k, v in dict(row).items()}
+        # Parse all_accounts JSONB (may arrive as str or already dict)
         aa = result.get("all_accounts")
         if isinstance(aa, str):
             try:
@@ -275,9 +283,6 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
                 result["all_accounts"] = {}
         elif aa is None:
             result["all_accounts"] = {}
-        # Surface pre-CECL ALLL (acct_719) from JSONB for institutions that still file it
-        aa_upper = {k.upper(): v for k, v in (result["all_accounts"] or {}).items()}
-        result.setdefault("acct_719", aa_upper.get("719") or aa_upper.get("ACCT_719"))
         return result
     except Exception as exc:
         logger.warning("_load_inst_row failed charter=%s period=%s: %s", charter_number, period, exc)
@@ -374,8 +379,9 @@ def _load_regional_comparison(
             ).mappings().all()
 
         for r in peer_rows:
-            loans = float(r.get("acct_025B") or 0)
-            delinq = float(r.get("acct_041B") or 0)
+            # PG returns lowercase column names from raw text(); use lowercase keys here
+            loans = float(r.get("acct_025b") or r.get("acct_025B") or 0)
+            delinq = float(r.get("acct_041b") or r.get("acct_041B") or 0)
             if loans > 0:
                 rate = delinq / loans
                 rates.append(rate)
