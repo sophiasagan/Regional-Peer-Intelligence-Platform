@@ -65,36 +65,36 @@ _B_GRAY  = "F5F5F5"
 
 _STARS = {1: "★☆☆☆☆", 2: "★★☆☆☆", 3: "★★★☆☆", 4: "★★★★☆", 5: "★★★★★"}
 
-# Loan-type delinquency: (display label, inst_rate_key, all_accts_60plus_codes, balance_cols, peer_metric_key)
-# NCUA field names per 5300 v2025.1 — verify against data dictionary before ingestion
+# Loan-type delinquency: (display label, inst_rate_key, delinq_cols, balance_cols, peer_metric_key)
+# delinq_cols are named ORM columns (not JSONB codes) — all confirmed in db.py
 _LOAN_TYPE_CFG = [
     (
         "Total 60+",
         "delinq_rate_total",
-        [],                                  # computed from acct_041B / acct_025B
+        [],                                          # computed from acct_041B / acct_025B directly
         [],
-        "delinq_rate_total",                 # matches compute_ratios() output key
+        "delinq_rate_total",
     ),
     (
         "Auto Loans",
         "auto_delinq_rate",
-        ["DL0030", "DL0035"],                # new vehicle + used vehicle 60+ day
+        ["acct_041C1", "acct_041C2"],                # new + used vehicle 60+ (db.py FS220I cols)
         ["acct_385", "acct_370"],
-        "delinq_rate_auto",                  # matches METRIC_LABELS / compute_ratios() key
+        "delinq_rate_auto",
     ),
     (
         "Credit Card",
         "credit_card_delinq_rate",
-        ["DL0060"],                          # credit card 60+ day
+        ["acct_045B"],                               # total delinquent CC loans (db.py FS220B col)
         ["acct_396"],
-        "delinq_rate_cc",                    # matches METRIC_LABELS / compute_ratios() key
+        "delinq_rate_cc",
     ),
     (
         "Commercial",
         "commercial_delinq_rate",
-        ["DL0070", "DL0072"],                # commercial RE + commercial non-RE 60+ day
+        ["acct_041G1", "acct_041G2", "acct_041G3", "acct_041G4"],  # all commercial types (db.py)
         ["acct_718A5", "acct_400P"],
-        "delinq_rate_commercial_total",      # matches compute_ratios() key
+        "delinq_rate_commercial_total",
     ),
 ]
 
@@ -259,11 +259,12 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
             row = conn.execute(
                 text("""
                     SELECT acct_010, acct_025B, acct_041B, acct_020B,
-                           acct_AS0048, acct_550, acct_551,
+                           acct_AS0048, acct_719, acct_550, acct_551,
                            acct_385, acct_370, acct_396, acct_703A,
-                           acct_386A, acct_718A5, acct_400P, acct_997,
+                           acct_386A, acct_718A5, acct_400P, acct_797,
                            acct_IS0010, acct_117, acct_671, acct_661A,
-                           all_accounts
+                           acct_041C1, acct_041C2, acct_045B,
+                           acct_041G1, acct_041G2, acct_041G3, acct_041G4
                     FROM institutions_quarterly
                     WHERE charter_number = :c AND period = :p
                     LIMIT 1
@@ -274,33 +275,17 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
             return {}
         # Remap lowercase PG keys → ORM canonical names (e.g. acct_025b → acct_025B)
         result = {_case_map.get(k, k): v for k, v in dict(row).items()}
-        # Parse all_accounts JSONB (may arrive as str or already dict)
-        aa = result.get("all_accounts")
-        if isinstance(aa, str):
-            try:
-                result["all_accounts"] = json.loads(aa)
-            except Exception:
-                result["all_accounts"] = {}
-        elif aa is None:
-            result["all_accounts"] = {}
-        # Surface acct_719 (pre-CECL ALLL) from JSONB — column may not exist in all DB deployments
-        if result.get("acct_719") is None:
-            aa_upper = {k.upper(): v for k, v in (result.get("all_accounts") or {}).items()}
-            result["acct_719"] = aa_upper.get("719") or aa_upper.get("ACCT_719")
         return result
     except Exception as exc:
         logger.warning("_load_inst_row failed charter=%s period=%s: %s", charter_number, period, exc)
         return {}
 
 
-def _compute_loan_type_rate(row: dict, delinq_codes: list[str], balance_cols: list[str]) -> Optional[float]:
-    """Compute delinquency rate for a loan type from all_accounts + balance columns."""
-    if not delinq_codes or not balance_cols:
+def _compute_loan_type_rate(row: dict, delinq_cols: list[str], balance_cols: list[str]) -> Optional[float]:
+    """Compute delinquency rate for a loan type using named ORM columns from the inst row."""
+    if not delinq_cols or not balance_cols:
         return None
-    aa = row.get("all_accounts") or {}
-    # Normalize keys — NCUA codes may be stored as uppercase or mixed case
-    aa_upper = {k.upper(): v for k, v in aa.items()}
-    delinq_total = sum(float(aa_upper.get(c.upper(), 0) or 0) for c in delinq_codes)
+    delinq_total  = sum(float(row.get(c) or 0) for c in delinq_cols)
     balance_total = sum(float(row.get(c) or 0) for c in balance_cols)
     if balance_total <= 0:
         return None
