@@ -245,37 +245,25 @@ def _fetch_peer_dist(
 def _load_inst_row(charter_number: int, period: str, engine) -> dict:
     """Fetch one period of institution data. Returns {} on miss.
 
-    PostgreSQL folds unquoted identifiers to lowercase (acct_025B → acct_025b).
-    We normalise keys back to the canonical ORM-defined names so that downstream
-    code can use inst.get("acct_025B") etc. without case surprises.
+    Uses the ORM select (same as _gather_data / _load_peer_values) so that:
+    - Column names are preserved in mixed-case (acct_025B, acct_041B, etc.)
+    - No manual case normalisation needed
+    - Consistent with the rest of the codebase
     """
     try:
-        from sqlalchemy import text
-        from db import institutions_quarterly as _iq
-        # Build lowercase→canonical map once from the ORM metadata
-        _case_map = {c.name.lower(): c.name for c in _iq.columns}
-
+        from sqlalchemy import select
+        from db import institutions_quarterly
         with engine.connect() as conn:
             row = conn.execute(
-                text("""
-                    SELECT acct_010, acct_025B, acct_041B, acct_020B,
-                           acct_AS0048, acct_719, acct_550, acct_551,
-                           acct_385, acct_370, acct_396, acct_703A,
-                           acct_386A, acct_718A5, acct_400P, acct_797,
-                           acct_IS0010, acct_117, acct_671, acct_661A,
-                           acct_041C1, acct_041C2, acct_045B,
-                           acct_041G1, acct_041G2, acct_041G3, acct_041G4
-                    FROM institutions_quarterly
-                    WHERE charter_number = :c AND period = :p
-                    LIMIT 1
-                """),
-                {"c": charter_number, "p": period},
+                select(institutions_quarterly).where(
+                    institutions_quarterly.c.charter_number == charter_number,
+                    institutions_quarterly.c.period == period,
+                )
             ).mappings().first()
         if not row:
+            logger.warning("_load_inst_row: no row found charter=%s period=%s", charter_number, period)
             return {}
-        # Remap lowercase PG keys → ORM canonical names (e.g. acct_025b → acct_025B)
-        result = {_case_map.get(k, k): v for k, v in dict(row).items()}
-        return result
+        return dict(row)
     except Exception as exc:
         logger.warning("_load_inst_row failed charter=%s period=%s: %s", charter_number, period, exc)
         return {}
@@ -285,7 +273,11 @@ def _compute_loan_type_rate(row: dict, delinq_cols: list[str], balance_cols: lis
     """Compute delinquency rate for a loan type using named ORM columns from the inst row."""
     if not delinq_cols or not balance_cols:
         return None
-    delinq_total  = sum(float(row.get(c) or 0) for c in delinq_cols)
+    delinq_vals = [row.get(c) for c in delinq_cols]
+    # All None means the column wasn't populated for this institution/period
+    if all(v is None for v in delinq_vals):
+        return None
+    delinq_total  = sum(float(v or 0) for v in delinq_vals)
     balance_total = sum(float(row.get(c) or 0) for c in balance_cols)
     if balance_total <= 0:
         return None
@@ -347,7 +339,6 @@ def _load_regional_comparison(
 ) -> dict:
     """Compute delinquency rate distribution across regional peer institutions."""
     from db import get_engine
-    from sqlalchemy import text
 
     engine = get_engine(db_url)
     rates: list[float] = []
@@ -357,20 +348,24 @@ def _load_regional_comparison(
         return {}
 
     try:
+        from sqlalchemy import select
+        from db import institutions_quarterly
         with engine.connect() as conn:
             peer_rows = conn.execute(
-                text("""
-                    SELECT charter_number, institution_name, acct_041B, acct_025B
-                    FROM institutions_quarterly
-                    WHERE charter_number = ANY(:charters) AND period = :p
-                """),
-                {"charters": peer_charters, "p": period},
+                select(
+                    institutions_quarterly.c.charter_number,
+                    institutions_quarterly.c.institution_name,
+                    institutions_quarterly.c["acct_041B"],
+                    institutions_quarterly.c["acct_025B"],
+                ).where(
+                    institutions_quarterly.c.charter_number.in_(peer_charters),
+                    institutions_quarterly.c.period == period,
+                )
             ).mappings().all()
 
         for r in peer_rows:
-            # PG returns lowercase column names from raw text(); use lowercase keys here
-            loans = float(r.get("acct_025b") or r.get("acct_025B") or 0)
-            delinq = float(r.get("acct_041b") or r.get("acct_041B") or 0)
+            loans = float(r.get("acct_025B") or 0)
+            delinq = float(r.get("acct_041B") or 0)
             if loans > 0:
                 rate = delinq / loans
                 rates.append(rate)
