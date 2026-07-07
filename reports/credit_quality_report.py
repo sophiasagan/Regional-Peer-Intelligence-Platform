@@ -259,7 +259,7 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
             row = conn.execute(
                 text("""
                     SELECT acct_010, acct_025B, acct_041B, acct_020B,
-                           acct_AS0048, acct_719, acct_550, acct_551,
+                           acct_AS0048, acct_550, acct_551,
                            acct_385, acct_370, acct_396, acct_703A,
                            acct_386A, acct_718A5, acct_400P, acct_997,
                            acct_IS0010, acct_117, acct_671, acct_661A,
@@ -283,6 +283,10 @@ def _load_inst_row(charter_number: int, period: str, engine) -> dict:
                 result["all_accounts"] = {}
         elif aa is None:
             result["all_accounts"] = {}
+        # Surface acct_719 (pre-CECL ALLL) from JSONB — column may not exist in all DB deployments
+        if result.get("acct_719") is None:
+            aa_upper = {k.upper(): v for k, v in (result.get("all_accounts") or {}).items()}
+            result["acct_719"] = aa_upper.get("719") or aa_upper.get("ACCT_719")
         return result
     except Exception as exc:
         logger.warning("_load_inst_row failed charter=%s period=%s: %s", charter_number, period, exc)
