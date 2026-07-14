@@ -1,27 +1,28 @@
-import React from 'react'
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
-import CreditQuality    from './pages/CreditQuality'
-import MarketMap        from './pages/MarketMap'
-import NLQuery          from './pages/NLQuery'
-import PeerComparison   from './pages/PeerComparison'
-import Reports          from './pages/Reports'
+import React, { useState } from 'react'
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
+import CreditQuality     from './pages/CreditQuality'
+import MarketMap         from './pages/MarketMap'
+import NLQuery           from './pages/NLQuery'
+import PeerComparison    from './pages/PeerComparison'
+import Reports           from './pages/Reports'
 import CallahanMigration from './pages/CallahanMigration'
+import Setup             from './pages/Setup'
+import Home              from './pages/Home'
 
-// Tenant defaults — in a multi-tenant setup these come from the JWT.
-// For now the reference institution is Dort Financial CU, charter 68708.
-const CHARTER_NUMBER = parseInt(import.meta.env.VITE_CHARTER_NUMBER ?? '68708', 10);
-const DEMO_TOKEN     = import.meta.env.VITE_DEMO_TOKEN ?? 'demo';
+const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN ?? 'demo';
 
 const NAV = [
-  { to: '/credit-quality',      icon: '📊', label: 'Credit Quality'    },
-  { to: '/market-map',          icon: '🗺',  label: 'Market Map'        },
-  { to: '/peer-comparison',     icon: '⚖️',  label: 'Peer Comparison'   },
-  { to: '/query',               icon: '💬', label: 'Ask Intelligence'  },
-  { to: '/reports',             icon: '📄', label: 'Reports'           },
-  { to: '/onboarding/callahan', icon: '🔀', label: 'Peer Group Setup'  },
+  { to: '/home',                 icon: '🏠', label: 'Home'              },
+  { to: '/credit-quality',       icon: '📊', label: 'Credit Quality'    },
+  { to: '/market-map',           icon: '🗺',  label: 'Market Map'        },
+  { to: '/peer-comparison',      icon: '⚖️',  label: 'Peer Comparison'   },
+  { to: '/query',                icon: '💬', label: 'Ask Intelligence'  },
+  { to: '/reports',              icon: '📄', label: 'Reports'           },
+  { to: '/onboarding/callahan',  icon: '🔀', label: 'Peer Group Setup'  },
 ]
 
-function Sidebar() {
+function Sidebar({ charterNumber, onReset }) {
+  const navigate = useNavigate();
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">P76 Intelligence</div>
@@ -37,30 +38,77 @@ function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <div className="sidebar-footer">
+        <div className="sidebar-charter">Charter {charterNumber}</div>
+        <button
+          className="sidebar-change-btn"
+          onClick={() => { onReset(); navigate('/setup'); }}
+        >
+          Change institution
+        </button>
+      </div>
     </aside>
   )
 }
 
 export default function App() {
+  const [charterNumber, setCharterNumber] = useState(() => {
+    const stored = localStorage.getItem('p76_charter_number');
+    return stored ? parseInt(stored, 10) : null;
+  });
+
+  function handleSetCharter(num) {
+    localStorage.setItem('p76_charter_number', String(num));
+    setCharterNumber(num);
+  }
+
+  function handleReset() {
+    localStorage.removeItem('p76_charter_number');
+    setCharterNumber(null);
+  }
+
   return (
     <BrowserRouter>
-      <div className="app-shell">
-        <Sidebar />
-        <div className="main-area">
-          <div className="page-body">
-            <Routes>
-              <Route path="/"                     element={<Navigate to="/credit-quality" replace />} />
-              <Route path="/credit-quality"       element={<CreditQuality />} />
-              <Route path="/market-map"           element={<MarketMap charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
-              <Route path="/peer-comparison"      element={<PeerComparison charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
-              <Route path="/query"                element={<NLQuery charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
-              <Route path="/reports"              element={<Reports charterNumber={CHARTER_NUMBER} token={DEMO_TOKEN} />} />
-              <Route path="/onboarding/callahan"  element={<CallahanMigration />} />
-              <Route path="*"                     element={<Navigate to="/credit-quality" replace />} />
-            </Routes>
-          </div>
-        </div>
-      </div>
+      <Routes>
+        {/* ── Setup (no sidebar) ── */}
+        <Route
+          path="/setup"
+          element={
+            charterNumber
+              ? <Navigate to="/home" replace />
+              : <Setup onComplete={(num) => { handleSetCharter(num); }} />
+          }
+        />
+
+        {/* ── App shell (requires charter) ── */}
+        {charterNumber ? (
+          <Route
+            path="/*"
+            element={
+              <div className="app-shell">
+                <Sidebar charterNumber={charterNumber} onReset={handleReset} />
+                <div className="main-area">
+                  <div className="page-body">
+                    <Routes>
+                      <Route path="/"                    element={<Navigate to="/home" replace />} />
+                      <Route path="/home"                element={<Home charterNumber={charterNumber} token={DEMO_TOKEN} onReset={handleReset} />} />
+                      <Route path="/credit-quality"      element={<CreditQuality />} />
+                      <Route path="/market-map"          element={<MarketMap charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/peer-comparison"     element={<PeerComparison charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/query"               element={<NLQuery charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/reports"             element={<Reports charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/onboarding/callahan" element={<CallahanMigration />} />
+                      <Route path="*"                    element={<Navigate to="/home" replace />} />
+                    </Routes>
+                  </div>
+                </div>
+              </div>
+            }
+          />
+        ) : (
+          <Route path="*" element={<Navigate to="/setup" replace />} />
+        )}
+      </Routes>
     </BrowserRouter>
   )
 }
