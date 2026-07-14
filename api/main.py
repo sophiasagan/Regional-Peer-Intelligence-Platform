@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 JWT_SECRET    = os.environ.get("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 
-SKIP_AUTH = ("/onboarding", "/health", "/docs", "/openapi.json", "/redoc")
+SKIP_AUTH = ("/onboarding", "/health", "/institutions", "/docs", "/openapi.json", "/redoc")
 
 # Permissive CORS — Bearer token auth, no cookies, so wildcard is safe
 _CORS = {
@@ -126,6 +126,53 @@ async def tenant_middleware(request: Request, call_next):
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "version": "2.0.0"}
+
+
+@app.get("/institutions/{charter_number}")
+async def get_institution(charter_number: int, period: str = "2026Q1"):
+    """Return basic identity fields for a charter number. Used by Setup + Home pages."""
+    from sqlalchemy import select
+    from db import get_engine, institutions_quarterly
+    engine = get_engine()
+    with engine.connect() as conn:
+        row = conn.execute(
+            select(
+                institutions_quarterly.c.charter_number,
+                institutions_quarterly.c.institution_name,
+                institutions_quarterly.c.state_code,
+                institutions_quarterly.c.county_name,
+                institutions_quarterly.c.acct_010,
+                institutions_quarterly.c.acct_083,
+            ).where(
+                institutions_quarterly.c.charter_number == charter_number,
+                institutions_quarterly.c.period == period,
+            )
+        ).mappings().first()
+    if not row:
+        # Try any period if the requested one has no data yet
+        with engine.connect() as conn:
+            row = conn.execute(
+                select(
+                    institutions_quarterly.c.charter_number,
+                    institutions_quarterly.c.institution_name,
+                    institutions_quarterly.c.state_code,
+                    institutions_quarterly.c.county_name,
+                    institutions_quarterly.c.acct_010,
+                    institutions_quarterly.c.acct_083,
+                ).where(
+                    institutions_quarterly.c.charter_number == charter_number,
+                ).order_by(institutions_quarterly.c.period.desc()).limit(1)
+            ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Charter {charter_number} not found")
+    return {
+        "charter_number":   row["charter_number"],
+        "institution_name": row["institution_name"],
+        "state_code":       row["state_code"],
+        "county_name":      row["county_name"],
+        "total_assets":     float(row["acct_010"]) if row["acct_010"] else None,
+        "member_count":     int(row["acct_083"])   if row["acct_083"] else None,
+    }
 
 
 app.include_router(geography.router,       prefix="/geography",      tags=["geography"])
