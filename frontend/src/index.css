@@ -703,12 +703,19 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .pgs-build-btn:hover:not(:disabled) { background: #283593; }
 .pgs-build-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.pgs-result-card       { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-.pgs-result-header     { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+.pgs-result-card       { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.pgs-result-header     { display: flex; align-items: baseline; gap: 12px; }
 .pgs-result-count      { font-size: 18px; font-weight: 600; color: #1A237E; }
 .pgs-result-group      { font-size: 12px; color: var(--text-muted); }
 
-.pgs-preview-table     { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+.pgs-inst-list         { }
+.pgs-inst-list-label   { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 10px; }
+.pgs-inst-grid         { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.pgs-inst-card         { background: #F8F9FF; border: 1px solid #E8EAF6; border-radius: 8px; padding: 12px 14px; }
+.pgs-inst-name         { font-size: 13px; font-weight: 600; color: #1A237E; margin-bottom: 3px; }
+.pgs-inst-meta         { font-size: 11px; color: var(--text-muted); }
+
+.pgs-preview-table     { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pgs-preview-table th  { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); border-bottom: 2px solid var(--border); padding: 0 10px 8px; }
 .pgs-preview-table td  { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .pgs-preview-table tr:last-child td { border-bottom: none; }
@@ -718,6 +725,7 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .pgs-stars--bottom     { color: var(--color-red); }
 .pgs-pctile            { font-size: 11px; color: var(--text-muted); }
 
+.pgs-preview-table + .pgs-result-actions { margin-top: 4px; }
 .pgs-result-actions    { display: flex; align-items: center; gap: 12px; }
 .pgs-confirm-btn       { padding: 11px 24px; background: #1A237E; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .15s; }
 .pgs-confirm-btn:hover { background: #283593; }

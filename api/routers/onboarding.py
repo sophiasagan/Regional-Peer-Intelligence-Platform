@@ -88,6 +88,13 @@ class PreviewMetricRow(BaseModel):
     is_adverse:      bool
 
 
+class PeerInstitution(BaseModel):
+    charter_number: int
+    institution_name: str
+    state_code: Optional[str]
+    total_assets: Optional[float]
+
+
 class PeerGroupBuildResponse(BaseModel):
     peer_group_id:    str
     group_name:       str
@@ -96,6 +103,7 @@ class PeerGroupBuildResponse(BaseModel):
     institution_name: str
     institution_state: Optional[str]
     preview_metrics:  list[PreviewMetricRow]
+    institutions:     list[PeerInstitution] = []
 
 
 class ComparisonRow(BaseModel):
@@ -182,7 +190,7 @@ def _build_peer_group(
 
     tier_label = ASSET_TIER_DISPLAY.get(criteria.asset_tier, criteria.asset_tier)
     state_label = ", ".join(sorted(criteria.states))
-    group_name = f"Callahan National — {tier_label} — {state_label}"
+    group_name = f"Magnus National — {tier_label} — {state_label}"
 
     # Upsert into peer_groups
     group_id = str(uuid.uuid4())
@@ -190,7 +198,7 @@ def _build_peer_group(
         existing = conn.execute(
             text("""
                 SELECT id FROM peer_groups
-                WHERE tenant_id = :tid AND group_name = :gn AND group_type = 'callahan_national'
+                WHERE tenant_id = :tid AND group_name = :gn AND group_type = 'magnus_national'
                 LIMIT 1
             """),
             {"tid": tenant_id, "gn": group_name},
@@ -210,7 +218,7 @@ def _build_peer_group(
                 text("""
                     INSERT INTO peer_groups
                       (id, tenant_id, group_name, group_type, geography_type, institution_ids, is_default)
-                    VALUES (:id, :tid, :gn, 'callahan_national', 'national', :ids, false)
+                    VALUES (:id, :tid, :gn, 'magnus_national', 'national', :ids, false)
                 """),
                 {
                     "id":  group_id,
@@ -528,14 +536,37 @@ async def build_callahan_peer_group(
     peer_int = [int(c) for c in charters]
     preview  = _compute_preview_metrics(charter_number, period, peer_int, DB_URL)
 
+    # Fetch institution name/state/assets for display
+    engine = get_engine(DB_URL)
+    with engine.connect() as conn:
+        inst_rows = conn.execute(
+            text("""
+                SELECT charter_number, institution_name, state_code, acct_010
+                FROM institutions_quarterly
+                WHERE charter_number = ANY(:charters) AND period = :period
+                ORDER BY acct_010 DESC
+            """),
+            {"charters": peer_int, "period": period},
+        ).mappings().all()
+    institutions = [
+        PeerInstitution(
+            charter_number   = r["charter_number"],
+            institution_name = r["institution_name"] or f"Charter {r['charter_number']}",
+            state_code       = r["state_code"],
+            total_assets     = float(r["acct_010"]) if r["acct_010"] else None,
+        )
+        for r in inst_rows
+    ]
+
     return PeerGroupBuildResponse(
         peer_group_id     = group_id,
-        group_name        = f"Callahan National — {ASSET_TIER_DISPLAY.get(criteria.asset_tier)} — {', '.join(sorted(criteria.states))}",
+        group_name        = f"Magnus National — {ASSET_TIER_DISPLAY.get(criteria.asset_tier)} — {', '.join(sorted(criteria.states))}",
         n_institutions    = n_institutions,
         period            = period,
         institution_name  = institution_name,
         institution_state = institution_state,
         preview_metrics   = preview,
+        institutions      = institutions,
     )
 
 

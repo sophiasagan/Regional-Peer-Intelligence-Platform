@@ -216,6 +216,8 @@ export default function PeerGroupSetup({ charterNumber, token, period = '2026Q1'
       {/* Results preview */}
       {result && (
         <div className="pgs-result-card">
+
+          {/* Summary row */}
           <div className="pgs-result-header">
             <div className="pgs-result-count">
               <strong>{result.n_institutions?.toLocaleString()}</strong> credit unions matched
@@ -223,6 +225,28 @@ export default function PeerGroupSetup({ charterNumber, token, period = '2026Q1'
             <div className="pgs-result-group">{result.group_name}</div>
           </div>
 
+          {/* Matched institution list */}
+          {result.institutions?.length > 0 && (
+            <div className="pgs-inst-list">
+              <div className="pgs-inst-list-label">Matched institutions</div>
+              <div className="pgs-inst-grid">
+                {result.institutions.map(inst => (
+                  <div key={inst.charter_number} className="pgs-inst-card">
+                    <div className="pgs-inst-name">{inst.institution_name}</div>
+                    <div className="pgs-inst-meta">
+                      {[
+                        inst.state_code,
+                        inst.total_assets && fmtValue(inst.total_assets, 'dollar') + ' assets',
+                        `#${inst.charter_number}`,
+                      ].filter(Boolean).join('  ·  ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Metrics table */}
           <table className="pgs-preview-table">
             <thead>
               <tr>
