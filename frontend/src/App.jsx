@@ -25,7 +25,7 @@ function Sidebar({ charterNumber, onReset }) {
   const navigate = useNavigate();
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">P76 Intelligence</div>
+      <div className="sidebar-logo">Magnus</div>
       <nav className="sidebar-nav">
         {NAV.map(({ to, icon, label }) => (
           <NavLink

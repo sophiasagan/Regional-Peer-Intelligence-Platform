@@ -65,8 +65,8 @@ export default function Setup({ onComplete }) {
       <div className="setup-card">
 
         <div className="setup-brand">
-          <div className="setup-logo">P76</div>
-          <div className="setup-brand-name">Regional Market Intelligence</div>
+          <div className="setup-logo">M</div>
+          <div className="setup-brand-name">Magnus · Regional Market Intelligence</div>
         </div>
 
         <h1 className="setup-title">Get started</h1>

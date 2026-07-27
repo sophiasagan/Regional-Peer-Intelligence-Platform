@@ -458,7 +458,7 @@ function Step2({ charterNumber, period, token, peerGroupId, onComplete, onBack }
                 <tr>
                   <th>Callahan Metric</th>
                   <th>Callahan Value</th>
-                  <th>P76 Value</th>
+                  <th>Magnus Value</th>
                   <th>Match</th>
                   <th>Delta</th>
                 </tr>
@@ -587,7 +587,7 @@ function Step3({ charterNumber, period, token, peerGroupId, institutionState, on
       {/* Value proposition — never frame as "switching" or "replacing" Callahan */}
       <div className="cm-value-prop">
         <h3 className="cm-value-prop__title">
-          P76 shows you everything Callahan shows you — plus the regional picture.
+          Magnus shows you everything Callahan shows you — plus the regional picture.
         </h3>
         <ul className="cm-value-prop__list">
           <li>Same NCUA data, same metric formulas, same peer group criteria</li>
