@@ -267,7 +267,7 @@ function MetricTabs({ activeMetric, onSelect, comparison }) {
 
 // ── Main page ───────────────────────────────────────────────────────────────
 
-export default function CreditQuality({ charterNumber = 68708, token }) {
+export default function CreditQuality({ charterNumber, token }) {
   const [period,         setPeriod]        = useState('2026Q1');
   const [periodLabel,    setPeriodLabel]   = useState('3Y');
   const [nPeriods,       setNPeriods]      = useState(12);

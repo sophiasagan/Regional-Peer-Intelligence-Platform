@@ -621,7 +621,7 @@ export default function CallahanMigration({
   onComplete,
 }) {
   const navigate = useNavigate();
-  const [charterInput,     setCharterInput]     = useState(charterNumberProp ?? '68708');
+  const [charterInput,     setCharterInput]     = useState(charterNumberProp ?? '');
   const [periodInput,      setPeriodInput]      = useState(periodProp        ?? '2025Q4');
   const charterNumber = charterInput  || charterNumberProp;
   const period        = periodInput   || periodProp;

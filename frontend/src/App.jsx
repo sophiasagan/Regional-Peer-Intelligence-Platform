@@ -92,12 +92,12 @@ export default function App() {
                     <Routes>
                       <Route path="/"                    element={<Navigate to="/home" replace />} />
                       <Route path="/home"                element={<Home charterNumber={charterNumber} token={DEMO_TOKEN} onReset={handleReset} />} />
-                      <Route path="/credit-quality"      element={<CreditQuality />} />
+                      <Route path="/credit-quality"      element={<CreditQuality charterNumber={charterNumber} token={DEMO_TOKEN} />} />
                       <Route path="/market-map"          element={<MarketMap charterNumber={charterNumber} token={DEMO_TOKEN} />} />
                       <Route path="/peer-comparison"     element={<PeerComparison charterNumber={charterNumber} token={DEMO_TOKEN} />} />
                       <Route path="/query"               element={<NLQuery charterNumber={charterNumber} token={DEMO_TOKEN} />} />
                       <Route path="/reports"             element={<Reports charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="/onboarding/callahan" element={<CallahanMigration />} />
+                      <Route path="/onboarding/callahan" element={<CallahanMigration charterNumber={charterNumber} token={DEMO_TOKEN} />} />
                       <Route path="*"                    element={<Navigate to="/home" replace />} />
                     </Routes>
                   </div>
