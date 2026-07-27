@@ -1,24 +1,24 @@
 import React, { useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
-import CreditQuality     from './pages/CreditQuality'
-import MarketMap         from './pages/MarketMap'
-import NLQuery           from './pages/NLQuery'
-import PeerComparison    from './pages/PeerComparison'
-import Reports           from './pages/Reports'
-import CallahanMigration from './pages/CallahanMigration'
-import Setup             from './pages/Setup'
-import Home              from './pages/Home'
+import CreditQuality    from './pages/CreditQuality'
+import MarketMap        from './pages/MarketMap'
+import NLQuery          from './pages/NLQuery'
+import PeerComparison   from './pages/PeerComparison'
+import Reports          from './pages/Reports'
+import PeerGroupSetup   from './pages/PeerGroupSetup'
+import Setup            from './pages/Setup'
+import Home             from './pages/Home'
 
 const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN ?? 'demo';
 
 const NAV = [
-  { to: '/home',                 icon: '🏠', label: 'Home'              },
-  { to: '/credit-quality',       icon: '📊', label: 'Credit Quality'    },
-  { to: '/market-map',           icon: '🗺',  label: 'Market Map'        },
-  { to: '/peer-comparison',      icon: '⚖️',  label: 'Peer Comparison'   },
-  { to: '/query',                icon: '💬', label: 'Ask Intelligence'  },
-  { to: '/reports',              icon: '📄', label: 'Reports'           },
-  { to: '/onboarding/callahan',  icon: '🔀', label: 'Peer Group Setup'  },
+  { to: '/home',             icon: '🏠', label: 'Home'             },
+  { to: '/credit-quality',   icon: '📊', label: 'Credit Quality'   },
+  { to: '/market-map',       icon: '🗺',  label: 'Market Map'       },
+  { to: '/peer-comparison',  icon: '⚖️',  label: 'Peer Comparison'  },
+  { to: '/query',            icon: '💬', label: 'Ask Intelligence' },
+  { to: '/reports',          icon: '📄', label: 'Reports'          },
+  { to: '/peer-group-setup', icon: '🔀', label: 'Peer Group Setup' },
 ]
 
 function Sidebar({ charterNumber, onReset }) {
@@ -70,17 +70,17 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ── Setup (no sidebar) ── */}
+        {/* ── Setup (no sidebar, full-screen) ── */}
         <Route
           path="/setup"
           element={
             charterNumber
-              ? <Navigate to="/home" replace />
-              : <Setup onComplete={(num) => { handleSetCharter(num); }} />
+              ? <Navigate to="/peer-group-setup" replace />
+              : <Setup onComplete={handleSetCharter} />
           }
         />
 
-        {/* ── App shell (requires charter) ── */}
+        {/* ── App shell (requires charter number) ── */}
         {charterNumber ? (
           <Route
             path="/*"
@@ -90,15 +90,15 @@ export default function App() {
                 <div className="main-area">
                   <div className="page-body">
                     <Routes>
-                      <Route path="/"                    element={<Navigate to="/home" replace />} />
-                      <Route path="/home"                element={<Home charterNumber={charterNumber} token={DEMO_TOKEN} onReset={handleReset} />} />
-                      <Route path="/credit-quality"      element={<CreditQuality charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="/market-map"          element={<MarketMap charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="/peer-comparison"     element={<PeerComparison charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="/query"               element={<NLQuery charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="/reports"             element={<Reports charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="/onboarding/callahan" element={<CallahanMigration charterNumber={charterNumber} token={DEMO_TOKEN} />} />
-                      <Route path="*"                    element={<Navigate to="/home" replace />} />
+                      <Route path="/"                element={<Navigate to="/home" replace />} />
+                      <Route path="/home"            element={<Home charterNumber={charterNumber} token={DEMO_TOKEN} onReset={handleReset} />} />
+                      <Route path="/peer-group-setup" element={<PeerGroupSetup charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/credit-quality"  element={<CreditQuality charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/market-map"      element={<MarketMap charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/peer-comparison" element={<PeerComparison charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/query"           element={<NLQuery charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="/reports"         element={<Reports charterNumber={charterNumber} token={DEMO_TOKEN} />} />
+                      <Route path="*"                element={<Navigate to="/home" replace />} />
                     </Routes>
                   </div>
                 </div>
