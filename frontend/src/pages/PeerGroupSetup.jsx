@@ -99,7 +99,14 @@ export default function PeerGroupSetup({ charterNumber, token, period = '2026Q1'
         try { const err = await res.json(); detail = err.detail || detail; } catch (_) {}
         throw new Error(detail);
       }
-      setResult(await res.json());
+      const data = await res.json();
+      setResult(data);
+      // Persist so Credit Quality and Peer Comparison use these peers by default
+      if (data.institutions?.length) {
+        const charters = data.institutions.map(i => i.charter_number);
+        localStorage.setItem('p76_peer_charters', JSON.stringify(charters));
+        localStorage.setItem('p76_peer_group_label', data.group_name);
+      }
     } catch (e) {
       setError(e.message);
     } finally {

@@ -64,6 +64,8 @@ export default function App() {
 
   function handleReset() {
     localStorage.removeItem('p76_charter_number');
+    localStorage.removeItem('p76_peer_charters');
+    localStorage.removeItem('p76_peer_group_label');
     setCharterNumber(null);
   }
 

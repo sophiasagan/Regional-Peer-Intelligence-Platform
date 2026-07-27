@@ -47,10 +47,17 @@ function usePeerComparison(charterNumber, period, peerGroup, token, customCharte
   return { data, loading };
 }
 
+function loadSavedPeerCharters() {
+  try {
+    const stored = localStorage.getItem('p76_peer_charters');
+    return stored ? JSON.parse(stored) : null;
+  } catch { return null; }
+}
+
 export default function PeerComparison({ charterNumber, token }) {
   const [period,         setPeriod]         = useState('2026Q1');
   const [peerGroup,      setPeerGroup]      = useState('REGIONAL');
-  const [customCharters, setCustomCharters] = useState(null);
+  const [customCharters, setCustomCharters] = useState(loadSavedPeerCharters);
 
   const { data, loading } = usePeerComparison(
     charterNumber, period, peerGroup, token, customCharters,

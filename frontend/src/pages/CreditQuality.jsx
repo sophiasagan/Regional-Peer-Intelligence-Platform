@@ -267,13 +267,20 @@ function MetricTabs({ activeMetric, onSelect, comparison }) {
 
 // ── Main page ───────────────────────────────────────────────────────────────
 
+function loadSavedPeerCharters() {
+  try {
+    const stored = localStorage.getItem('p76_peer_charters');
+    return stored ? JSON.parse(stored) : null;
+  } catch { return null; }
+}
+
 export default function CreditQuality({ charterNumber, token }) {
   const [period,         setPeriod]        = useState('2026Q1');
   const [periodLabel,    setPeriodLabel]   = useState('3Y');
   const [nPeriods,       setNPeriods]      = useState(12);
   const [peerGroup,      setPeerGroup]     = useState('REGIONAL');
   const [activeMetric,   setActiveMetric]  = useState('delinq_rate_total');
-  const [customCharters, setCustomCharters] = useState(null);
+  const [customCharters, setCustomCharters] = useState(loadSavedPeerCharters);
 
   const [geographyType, setGeographyType] = useState('state');
   const [geographyId,   setGeographyId]   = useState(null);
