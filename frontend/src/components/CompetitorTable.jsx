@@ -10,7 +10,7 @@
  * Confidence badge required on every geographic figure (P76 rule).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ConfidenceBadge from './ConfidenceBadge';
 
 const API = import.meta.env.VITE_API_URL ?? '';
@@ -163,7 +163,14 @@ export default function CompetitorTable({
 
   const { data, loading, error } = useMarketShareData(geoType, geoId, period, activeMetric, token);
 
-  const myId = charterNumber ? `ncua:${charterNumber}` : null;
+  const myId   = charterNumber ? `ncua:${charterNumber}` : null;
+  const yoursRef = useRef(null);
+
+  // Scroll "your institution" row into view after data loads or tab switches
+  useEffect(() => {
+    if (!yoursRef.current) return;
+    yoursRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [data, activeMetric]);
 
   const rows = data?.rows ?? [];
   const activeTab = METRIC_TABS.find(t => t.key === activeMetric) ?? METRIC_TABS[0];
@@ -289,6 +296,7 @@ export default function CompetitorTable({
                 return (
                   <tr
                     key={row.charter_or_cert}
+                    ref={isYours ? yoursRef : undefined}
                     className={[
                       'ct-row',
                       `ct-row--${row.institution_type}`,
