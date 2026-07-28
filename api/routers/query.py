@@ -243,7 +243,11 @@ def _build_system_prompt(tenant: TenantContext) -> str:
         "Always state which metric you are discussing using Callahan's exact metric names. "
         "When comparing to peers, specify the peer group (Regional, State, or National Asset-Size). "
         "Be precise with numbers — include both dollar amounts and rates where relevant. "
-        "Format percentages to three decimal places (e.g. 1.234%)."
+        "Format percentages to three decimal places (e.g. 1.234%). "
+        "IMPORTANT: When ACTUAL DATA FROM DATABASE is provided, always use those exact figures "
+        "to answer the question. Never say data is unavailable if numbers are provided. "
+        "For market share metrics computed from peer-group totals, note that the figure represents "
+        "the institution's share within its NCUA peer group — not FDIC geographic branch share."
     )
     return f"{base}\n\n{vocabulary}"
 
@@ -298,6 +302,31 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
                     query_req.charter_number, query_req.period,
                     PeerGroupType(query_req.peer_group), tenant_id, db_url=DB_URL,
                 )
+
+                # ── Fallback for share metrics not produced by compute_ratios ──
+                # deposit_market_share_pct / loan_market_share_pct require peer
+                # totals. Compute from NCUA data when inst_val is missing.
+                _SHARE_METRIC_COLS = {
+                    "deposit_market_share_pct": "acct_018",
+                    "loan_market_share_pct":    "acct_025B",
+                }
+                if inst_val is None and p76_metric in _SHARE_METRIC_COLS:
+                    col = _SHARE_METRIC_COLS[p76_metric]
+                    inst_raw = float(dict(rows[0]).get(col) or 0)
+                    if inst_raw > 0 and peer_charters:
+                        from sqlalchemy import func
+                        with engine.connect() as conn:
+                            peer_total = conn.execute(
+                                select(func.sum(institutions_quarterly.c[col])).where(
+                                    institutions_quarterly.c.charter_number.in_(
+                                        [int(c) for c in peer_charters]
+                                    ),
+                                    institutions_quarterly.c.period == query_req.period,
+                                )
+                            ).scalar()
+                        if peer_total and float(peer_total) > 0:
+                            inst_val = inst_raw / float(peer_total)
+
                 dist = compute_peer_distribution(p76_metric, peer_charters, query_req.period, DB_URL)
 
                 pct_rank = (
