@@ -436,14 +436,14 @@ export default function PeerBandChart({
       </div>
 
       {/* ── Chart ── */}
-      <ResponsiveContainer width="100%" height={320}>
+      <ResponsiveContainer width="100%" height={420}>
         <ComposedChart data={plotData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
-          <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+          <XAxis dataKey="period" tick={{ fontSize: 12 }} />
           <YAxis
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 12 }}
             tickFormatter={axisTickFmt}
-            width={62}
+            width={68}
             domain={[0, dataMax => Math.max(dataMax * 1.25, unit === '%' ? 0.005 : 1)]}
           />
           <Tooltip
@@ -451,9 +451,9 @@ export default function PeerBandChart({
           />
           <Legend
             verticalAlign="top"
-            height={32}
+            height={36}
             iconType="line"
-            wrapperStyle={{ fontSize: 11 }}
+            wrapperStyle={{ fontSize: 12 }}
           />
 
           {/* IQR band (p25–p75): stacked Area — base is transparent, height is gray */}
