@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from api.entitlements import require_entitlement
 from processing.delinquency_engine import DEFAULT_ALERT_THRESHOLDS
 from processing.early_warning_engine import (
     EarlyWarning,
@@ -52,6 +53,7 @@ async def get_alerts(
     n_periods: int = Query(default=8, description="Trailing quarters for trend detection"),
 ):
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     group_type = PeerGroupType(peer_group)
     peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
 
@@ -91,6 +93,8 @@ async def get_alerts(
 @router.get("/{charter_number}/thresholds")
 async def get_thresholds(request: Request, charter_number: int):
     """Return current alert thresholds for this institution (tenant-configurable defaults)."""
+    tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     # TODO: load tenant overrides from a tenant_thresholds table
     return DEFAULT_ALERT_THRESHOLDS
 
@@ -98,6 +102,8 @@ async def get_thresholds(request: Request, charter_number: int):
 @router.put("/{charter_number}/thresholds")
 async def update_thresholds(request: Request, charter_number: int, thresholds: dict):
     """Persist tenant-specific threshold overrides."""
+    tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     valid_keys = set(DEFAULT_ALERT_THRESHOLDS.keys())
     invalid = {k for k in thresholds if k not in valid_keys}
     if invalid:
@@ -176,6 +182,7 @@ async def get_early_warning_cards(
       projection    — linear extrapolation to examiner threshold
     """
     tenant_id   = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     group_type  = PeerGroupType(peer_group)
     peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
 
@@ -229,6 +236,8 @@ async def get_signal_separation(
       outperforming_market  — regional peers stressed; institution is handling it well
       no_signal             — no significant deviation detected
     """
+    tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     engine = PeerEngine(DB_URL)
     result = engine.separate_market_vs_institution_signal(
         charter_number=str(charter_number),

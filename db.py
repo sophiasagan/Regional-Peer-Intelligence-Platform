@@ -203,6 +203,14 @@ geo_cbsa_counties = Table(
     Column("is_metro", Boolean),
 )
 
+tenant_entitlements = Table(
+    "tenant_entitlements",
+    metadata,
+    Column("tenant_id",      String(64), primary_key=True),
+    Column("charter_number", Integer,    primary_key=True),
+    Column("granted_at",     DateTime,   server_default=func.now()),
+)
+
 hmda_respondents = Table(
     "hmda_respondents",
     metadata,

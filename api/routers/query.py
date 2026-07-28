@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from api.entitlements import require_entitlement
 from db import get_engine, institutions_quarterly
 from processing.delinquency_engine import compute_peer_distribution, compute_ratios, rank_institution, assign_stars
 from processing.peer_engine import PeerGroupType, build_peer_group
@@ -395,7 +396,7 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
     return QueryResponse(
         answer=answer,
         matched_metric=p76_metric,
-        matched_term_used=matched_term,
+        matched_term=matched_term,
         confirmation_text=confirmation,
         data=data,
         sources=sources,
@@ -405,4 +406,6 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
 @router.post("/", response_model=QueryResponse)
 async def ask(request_body: QueryRequest, request: Request):
     tenant_id = request.state.tenant_id
+    if request_body.charter_number is not None:
+        require_entitlement(tenant_id, request_body.charter_number)
     return await run_nl_query(request_body, tenant_id)

@@ -8,9 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
+import re
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+from api.entitlements import require_entitlement
 
 router = APIRouter()
 
@@ -82,6 +86,7 @@ async def generate_quarterly_report(
     """Generate the quarterly competitive intelligence board report."""
     from reports.quarterly_template import build_report
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     report_id = str(uuid.uuid4())
@@ -109,6 +114,7 @@ async def generate_credit_quality_report(
     """Generate the risk committee memo + board credit quality section."""
     from reports.credit_quality_report import build_report
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     report_id = str(uuid.uuid4())
@@ -126,10 +132,17 @@ async def generate_credit_quality_report(
     )
 
 
+_REPORT_CHARTER_RE = re.compile(r"^(?:quarterly|credit_quality)_(\d+)_")
+
+
 @router.get("/download/{filename:path}")
 async def download_report(request: Request, filename: str):
     # Strip directory components to prevent path traversal
     safe_name = Path(filename).name
+    m = _REPORT_CHARTER_RE.match(safe_name)
+    if m:
+        tenant_id = request.state.tenant_id
+        require_entitlement(tenant_id, int(m.group(1)))
     target = REPORTS_DIR / safe_name
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail=f"Report {safe_name!r} not found")

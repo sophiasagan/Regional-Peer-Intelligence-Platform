@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select, text
 
+from api.entitlements import require_entitlement
 from db import get_engine, institutions_quarterly
 from processing.delinquency_engine import (
     ADVERSE_METRICS,
@@ -137,6 +138,8 @@ async def get_institution_detail(
     period: str = Query(...),
 ):
     """Lightweight institution metadata — used by the frontend to resolve the institution's state."""
+    tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     engine = get_engine(DB_URL)
     with engine.connect() as conn:
         result = conn.execute(
@@ -183,6 +186,7 @@ async def get_peer_list(
     flagged so the UI can start them unchecked.
     """
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     engine = get_engine(DB_URL)
 
     # ── 1. Resolve base peer group ────────────────────────────────────────────
@@ -303,6 +307,7 @@ async def get_peer_comparison(
     ),
 ):
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     engine = get_engine(DB_URL)
 
     # Load institution financials
@@ -440,6 +445,7 @@ async def get_loan_type_breakdown(
     fields are added to the ingester (verify field names against NCUA 5300 data dictionary).
     """
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     engine = get_engine(DB_URL)
 
     with engine.connect() as conn:
@@ -724,6 +730,7 @@ async def get_schedule_comparison(
         )
 
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     engine    = get_engine(DB_URL)
 
     # ── Load institution row ───────────────────────────────────────────────────
@@ -866,6 +873,7 @@ async def get_single_metric_trend(
 ):
     """Return peer band data for PeerBandChart: institution + p10/p50/p90 over time."""
     tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     periods = _trailing_periods(period, n=n_periods)
 
     group_type = PeerGroupType(peer_group)

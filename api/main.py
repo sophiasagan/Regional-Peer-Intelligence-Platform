@@ -34,14 +34,14 @@ class NaNSafeJSONResponse(JSONResponse):
             separators=(",", ":"),
         ).encode("utf-8")
 
-from api.routers import alerts, geography, market_share, onboarding, peer_comparison, query, reports
+from api.routers import admin, alerts, geography, market_share, onboarding, peer_comparison, query, reports
 
 logger = logging.getLogger(__name__)
 
 JWT_SECRET    = os.environ.get("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 
-SKIP_AUTH = ("/onboarding", "/health", "/institutions", "/docs", "/openapi.json", "/redoc")
+SKIP_AUTH = ("/onboarding", "/health", "/institutions", "/docs", "/openapi.json", "/redoc", "/admin")
 
 # Permissive CORS — Bearer token auth, no cookies, so wildcard is safe
 _CORS = {
@@ -175,10 +175,11 @@ async def get_institution(charter_number: int, period: str = "2026Q1"):
     }
 
 
-app.include_router(geography.router,       prefix="/geography",      tags=["geography"])
-app.include_router(market_share.router,    prefix="/market-share",   tags=["market-share"])
-app.include_router(peer_comparison.router, prefix="/peer-comparison", tags=["peer-comparison"])
-app.include_router(query.router,           prefix="/ask",             tags=["nl-query"])
-app.include_router(alerts.router,          prefix="/alerts",          tags=["alerts"])
-app.include_router(reports.router,         prefix="/reports",         tags=["reports"])
-app.include_router(onboarding.router,      prefix="/onboarding",      tags=["onboarding"])
+app.include_router(admin.router,           prefix="/admin",           tags=["admin"])
+app.include_router(geography.router,       prefix="/geography",       tags=["geography"])
+app.include_router(market_share.router,    prefix="/market-share",    tags=["market-share"])
+app.include_router(peer_comparison.router, prefix="/peer-comparison",  tags=["peer-comparison"])
+app.include_router(query.router,           prefix="/ask",              tags=["nl-query"])
+app.include_router(alerts.router,          prefix="/alerts",           tags=["alerts"])
+app.include_router(reports.router,         prefix="/reports",          tags=["reports"])
+app.include_router(onboarding.router,      prefix="/onboarding",       tags=["onboarding"])

@@ -14,6 +14,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from api.entitlements import require_entitlement
 from processing.early_warning_engine import _trailing_periods
 from processing.market_share_engine import (
     calculate_market_share,
@@ -202,6 +203,8 @@ async def get_institution_heatmap(
     Uses FDIC branch totals + CU allocation totals as the county denominator.
     Returns empty county list (not an error) when allocation data is not yet computed.
     """
+    tenant_id = request.state.tenant_id
+    require_entitlement(tenant_id, charter_number)
     from sqlalchemy import text as sa_text
     from db import get_engine
 
