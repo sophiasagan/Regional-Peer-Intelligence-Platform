@@ -7,7 +7,7 @@ Spec (reports/quarterly_template.py):
   Section 1: Executive Summary         — Claude-generated, ~200 words
   Section 2: Market Share Dashboard    — one row per monitored geography
   Section 3: Competitive Movements     — Claude-generated per geography
-  Section 4: Credit Quality Summary    — Callahan style, dollar balance + rate
+  Section 4: Credit Quality Summary    — dollar balance + rate, peer-benchmarked
   Section 5: Market Opportunities      — Claude-generated, top 3 geographies
   Section 6: Data Notes               — confidence tiers, sources, next releases
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 DB_URL            = os.environ.get("DATABASE_URL")
 
-# ── Callahan / P76 color palette ──────────────────────────────────────────────
+# ── Report color palette ──────────────────────────────────────────────────────
 _C_GREEN  = RGBColor(0x2E, 0x7D, 0x32)   # text: top decile
 _C_RED    = RGBColor(0xC6, 0x28, 0x28)   # text: bottom decile
 _C_AMBER  = RGBColor(0xFF, 0x6F, 0x00)   # text: estimated / watch
@@ -237,7 +237,7 @@ def _claude(prompt: str, max_words: int = 250) -> str:
             max_tokens=max_words * 2,   # ~2 tokens/word
             system=(
                 "You are a credit union board report writer. Write concise, professional "
-                "narratives using Callahan Associates metric terminology. Be specific about "
+                "narratives using standard credit union metric terminology. Be specific about "
                 "numbers. Write in present tense for current conditions. No markdown."
             ),
             messages=[{"role": "user", "content": prompt}],
@@ -490,7 +490,7 @@ def _add_credit_quality_section(doc: Document, data: dict, peer_group_label: str
     _heading(doc, "Section 4 — Credit Quality Summary")
     doc.add_paragraph(
         f"Key credit quality metrics vs {peer_group_label}. "
-        "Callahan star rating: ★★★★★ = top 10% (best), ★☆☆☆☆ = bottom 10% (worst). "
+        "5-star rating: ★★★★★ = top 10% (best), ★☆☆☆☆ = bottom 10% (worst). "
         "Delinquency is an ADVERSE metric — lower rate = better = more stars. "
         "All delinquency figures are institution-level (not branch-level)."
     )
@@ -567,7 +567,7 @@ def _add_credit_quality_section(doc: Document, data: dict, peer_group_label: str
         row.cells[5].text = _STARS.get(stars, "—") if stars else "—"
         row.cells[6].text = f"{pct_rank:.0f}th" if pct_rank is not None else "—"
 
-        # Color star column by decile (Callahan convention)
+        # Color star column by decile
         if pct_rank is not None:
             if pct_rank >= 90:
                 _cell_bg(row.cells[5], _B_GREEN)

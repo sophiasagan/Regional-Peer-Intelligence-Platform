@@ -18,8 +18,8 @@ import React, { useState, useEffect } from 'react';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
-// Callahan metric names for use in body copy
-const CALLAHAN_LABELS = {
+// Display labels for metrics used in body copy
+const METRIC_LABELS = {
   delinq_rate_total:                'total delinquency ratio',
   delinq_rate_90plus:               '90+ day delinquency',
   chargeoff_rate_total_annualized:  'net charge-off rate',
@@ -80,7 +80,7 @@ const STATES = {
 // ── Body copy builders ────────────────────────────────────────────────────────
 
 function buildBodyCopy(signal, metric) {
-  const metricLabel = CALLAHAN_LABELS[metric] ?? metric;
+  const metricLabel = METRIC_LABELS[metric] ?? metric;
   const geo         = signal.regional_group_label ?? 'your region';
   const N           = signal.peers_above_national_median;
   const M           = signal.regional_peer_count;

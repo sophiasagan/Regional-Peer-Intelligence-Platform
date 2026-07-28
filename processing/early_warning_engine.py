@@ -61,9 +61,9 @@ class EarlyWarning:
     message: str
 
 
-# ── Callahan metric labels ────────────────────────────────────────────────────
+# ── Metric display labels ────────────────────────────────────────────────────
 
-_CALLAHAN_LABELS: dict[str, str] = {
+_METRIC_LABELS: dict[str, str] = {
     "delinq_rate_total":               "Total Delinquency Ratio",
     "delinq_rate_90plus":              "90+ Day Delinquency",
     "chargeoff_rate_total_annualized": "Net Charge-Off Ratio",
@@ -325,12 +325,12 @@ def compute_early_warning_cards(
     Return shape:
       {
         has_active_alerts: bool,
-        acceleration: { alert_level, metric, callahan_label, institution_value,
+        acceleration: { alert_level, metric, metric_label, institution_value,
                         recent_avg_change, historical_avg_change, acceleration_ratio },
-        divergence:   { alert_level, metric, callahan_label, institution_value,
+        divergence:   { alert_level, metric, metric_label, institution_value,
                         peer_median_current, inst_cumulative_change,
                         peer_cumulative_change, total_divergence },
-        projection:   { alert_level, metric, callahan_label, current_value,
+        projection:   { alert_level, metric, metric_label, current_value,
                         threshold_value, quarters_to_threshold, already_breached? }
       }
     """
@@ -365,7 +365,7 @@ def compute_early_warning_cards(
             continue
 
         is_adverse     = metric in ADVERSE_METRICS
-        callahan_label = _CALLAHAN_LABELS.get(metric, metric)
+        metric_label = _METRIC_LABELS.get(metric, metric)
 
         # Institution values chronologically for this metric
         inst_series = inst_df.set_index("period")[metric].dropna()
@@ -379,7 +379,7 @@ def compute_early_warning_cards(
         acc_card = {
             **acc,
             "metric":            metric,
-            "callahan_label":    callahan_label,
+            "metric_label":    metric_label,
             "institution_value": current_inst,
         }
         if best_acc is None or _LEVEL_ORDER.get(acc["alert_level"], 99) < _LEVEL_ORDER.get(best_acc["alert_level"], 99):
@@ -394,7 +394,7 @@ def compute_early_warning_cards(
             div_card = {
                 **div,
                 "metric":              metric,
-                "callahan_label":      callahan_label,
+                "metric_label":      metric_label,
                 "institution_value":   current_inst,
                 "peer_median_current": peer_vals[-1],
             }
@@ -408,7 +408,7 @@ def compute_early_warning_cards(
             proj_card = {
                 **proj,
                 "metric":          metric,
-                "callahan_label":  callahan_label,
+                "metric_label":  metric_label,
                 "current_value":   current_inst,
                 "threshold_value": threshold,
             }
@@ -466,7 +466,7 @@ def run_early_warning(
             qoq_change=c.get("recent_avg_change"),
             quarters_to_breach=None,
             signal_type="acceleration",
-            message=f"{c['callahan_label']}: acceleration ratio {c.get('acceleration_ratio', 0):.1f}×",
+            message=f"{c['metric_label']}: acceleration ratio {c.get('acceleration_ratio', 0):.1f}×",
         ))
 
     if cards["divergence"] and cards["divergence"]["alert_level"] != "none":
@@ -479,7 +479,7 @@ def run_early_warning(
             qoq_change=None,
             quarters_to_breach=None,
             signal_type="divergence",
-            message=f"{c['callahan_label']}: {abs(c.get('total_divergence', 0)) * 100:.2f} pct pts adverse divergence",
+            message=f"{c['metric_label']}: {abs(c.get('total_divergence', 0)) * 100:.2f} pct pts adverse divergence",
         ))
 
     if cards["projection"] and cards["projection"]["alert_level"] != "none":
@@ -493,7 +493,7 @@ def run_early_warning(
             qoq_change=None,
             quarters_to_breach=qtb,
             signal_type="threshold_projection",
-            message=f"{c['callahan_label']}: ~{qtb:.1f}q to threshold" if qtb else "Threshold breached",
+            message=f"{c['metric_label']}: ~{qtb:.1f}q to threshold" if qtb else "Threshold breached",
         ))
 
     severity = {AlertLevel.RED: 0, AlertLevel.YELLOW: 1, AlertLevel.GREEN: 2, AlertLevel.URGENT: 0, AlertLevel.ALERT: 1, AlertLevel.WATCH: 2, AlertLevel.NONE: 3}

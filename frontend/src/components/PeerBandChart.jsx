@@ -167,7 +167,7 @@ function InstDot({ cx, cy, payload, annotations }) {
 }
 
 // Percentile bar displayed below chart.
-function PercentileBar({ adjustedRank, peerCount, isAdverse, callahanLabel, peerDetails }) {
+function PercentileBar({ adjustedRank, peerCount, isAdverse, metricLabel, peerDetails }) {
   const [showPeers, setShowPeers] = React.useState(false);
   if (adjustedRank == null) return null;
   const pct  = adjustedRank.toFixed(0);
@@ -191,7 +191,7 @@ function PercentileBar({ adjustedRank, peerCount, isAdverse, callahanLabel, peer
           <span>{peerCount} peer institutions</span>
         )}
         {isAdverse && (
-          <span className="polarity-note"> — lower {callahanLabel} = better</span>
+          <span className="polarity-note"> — lower {metricLabel} = better</span>
         )}
       </div>
       {showPeers && peerDetails?.length > 0 && (
@@ -259,9 +259,9 @@ const CustomTooltip = ({ active, payload, label, unit, isAdverse }) => {
   );
 };
 
-function exportCsv(data, metric, charterNumber, period, callahanLabel, peerGroupLabel) {
+function exportCsv(data, metric, charterNumber, period, metricLabel, peerGroupLabel) {
   if (!data?.length) return;
-  const meta  = `${callahanLabel} — Charter ${charterNumber} — ${period} — ${peerGroupLabel}`;
+  const meta  = `${metricLabel} — Charter ${charterNumber} — ${period} — ${peerGroupLabel}`;
   const hdr   = 'Period,Your Institution,Peer Median,Top Decile,Bottom Decile,IQR P25,IQR P75,Regional Median,Peer Count';
   const rows  = data.map(d => [
     d.period,
@@ -348,7 +348,7 @@ export default function PeerBandChart({
 
   const handleDownload = useCallback(() => {
     exportCsv(plotData, metric, charterNumber, period,
-      meta?.callahan_label ?? metric, meta?.peer_group_label ?? peerGroup);
+      meta?.metric_label ?? metric, meta?.peer_group_label ?? peerGroup);
   }, [apiData, regionalApiData, meta, metric, charterNumber, period, peerGroup]);
 
   // ── Build chart data ─────────────────────────────────────────────────────
@@ -395,7 +395,7 @@ export default function PeerBandChart({
       )
     : null;
 
-  const callahanLabel  = meta?.callahan_label  ?? metric;
+  const metricLabel  = meta?.metric_label  ?? metric;
   const peerGroupLabel = meta?.peer_group_label ?? peerGroup;
   const showRegional   = peerGroup !== 'REGIONAL' && regionalApiData?.length > 0;
 
@@ -407,10 +407,10 @@ export default function PeerBandChart({
   return (
     <div className="peer-band-chart">
 
-      {/* ── Header (Callahan layout) ── */}
+      {/* ── Chart header ── */}
       <div className="chart-header">
         <div className="chart-header-left">
-          <h2 className="chart-metric-title">{callahanLabel}</h2>
+          <h2 className="chart-metric-title">{metricLabel}</h2>
           <span className="chart-period-label">{nPeriods / 4}Y / {nPeriods}Q</span>
         </div>
         <div className="chart-header-right">
@@ -562,7 +562,7 @@ export default function PeerBandChart({
         adjustedRank={adjustedRank}
         peerCount={lastPoint?.peer_count}
         isAdverse={isAdverse}
-        callahanLabel={callahanLabel}
+        metricLabel={metricLabel}
         peerDetails={peerDetails}
       />
 

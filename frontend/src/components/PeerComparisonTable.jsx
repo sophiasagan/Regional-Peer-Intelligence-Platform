@@ -49,7 +49,7 @@ function downloadCsv(metrics, charterNumber, period, peerGroupLabel) {
   const meta    = `Peer Group: ${peerGroupLabel},Charter: ${charterNumber},Period: ${period}`;
   const headers = 'Metric,Your Value,Peer Median,Top Decile (90th),Bottom Decile (10th),Percentile,Stars,Adverse';
   const rows    = metrics.map(m => [
-    `"${m.callahan_label}"`,
+    `"${m.metric_label}"`,
     m.institution_value ?? '',
     m.peer_median        ?? '',
     m.peer_p90           ?? '',
@@ -318,7 +318,7 @@ export default function PeerComparisonTable({
                     <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
                       {m.is_adverse ? '↓' : '↑'}
                     </span>
-                    {m.callahan_label}
+                    {m.metric_label}
                   </td>
                   <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
                   <td className="numeric-col">{fmt(m.peer_median,       m.unit)}</td>

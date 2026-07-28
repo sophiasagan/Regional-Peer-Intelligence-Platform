@@ -227,7 +227,7 @@ export default function NLQuery({ charterNumber, token, defaultPeriod = '2026Q1'
       <div className="nl-header">
         <div className="nl-header-left">
           <h1 className="nl-title">Ask Intelligence</h1>
-          <p className="nl-subtitle">Ask questions in plain language using Callahan metric names.</p>
+          <p className="nl-subtitle">Ask questions in plain language about your institution and peer group.</p>
         </div>
       </div>
 

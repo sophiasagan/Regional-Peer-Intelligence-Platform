@@ -126,7 +126,7 @@ class SignalResponse(BaseModel):
 class AccelerationCard(BaseModel):
     alert_level: Literal["none", "watch", "alert", "urgent"]
     metric: str
-    callahan_label: str
+    metric_label: str
     institution_value: Optional[float]
     recent_avg_change: Optional[float]
     historical_avg_change: Optional[float]
@@ -136,7 +136,7 @@ class AccelerationCard(BaseModel):
 class DivergenceCard(BaseModel):
     alert_level: Literal["none", "watch", "alert", "urgent"]
     metric: str
-    callahan_label: str
+    metric_label: str
     institution_value: Optional[float]
     peer_median_current: Optional[float]
     inst_cumulative_change: Optional[float]
@@ -147,7 +147,7 @@ class DivergenceCard(BaseModel):
 class ProjectionCard(BaseModel):
     alert_level: Literal["none", "watch", "alert", "urgent"]
     metric: str
-    callahan_label: str
+    metric_label: str
     current_value: Optional[float]
     threshold_value: Optional[float]
     quarters_to_threshold: Optional[float]

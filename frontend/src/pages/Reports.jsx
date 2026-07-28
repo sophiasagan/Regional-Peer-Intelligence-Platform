@@ -221,7 +221,7 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
                 {KEY_METRICS.map(m => (
                   <MetricPreviewRow
                     key={m.metric_name}
-                    label={m.callahan_label ?? m.metric_name}
+                    label={m.metric_label ?? m.metric_name}
                     value={m.institution_value}
                     stars={m.stars}
                     peerMedian={m.peer_median}

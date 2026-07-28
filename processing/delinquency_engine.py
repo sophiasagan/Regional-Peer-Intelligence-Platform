@@ -265,7 +265,7 @@ def compute_peer_distribution(
     }
 
 
-# YoY growth metrics — (account_code, callahan_label)
+# YoY growth metrics — (account_code, display_label)
 GROWTH_METRICS: dict[str, tuple[str, str]] = {
     "loan_growth_rate":   ("acct_025B", "Loan Growth Rate"),
     "share_growth_rate":  ("acct_018",  "Share Growth Rate"),
@@ -361,7 +361,7 @@ def rank_institution(value: float, distribution: dict, metric: str) -> float:
 
 
 def assign_stars(percentile_rank: float) -> int:
-    """Convert percentile rank to 1–5 Callahan star rating.
+    """Convert percentile rank to 1–5 star rating.
 
     1 star = bottom <10%
     5 stars = top 90%+

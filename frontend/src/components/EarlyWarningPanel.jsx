@@ -68,14 +68,14 @@ function AccelerationCard({ card }) {
 
       {hasAlert && card.recent_avg_change != null ? (
         <p className="ew-card-body">
-          Your <strong>{card.callahan_label}</strong> has risen{' '}
+          Your <strong>{card.metric_label}</strong> has risen{' '}
           <strong>{fmtPts(card.recent_avg_change)}</strong> over 2 quarters vs an avg of{' '}
           <strong>{fmtPts(card.historical_avg_change)}</strong> per quarter over the prior 6.
           Rate of increase is <strong>{fmtRatio(card.acceleration_ratio)}</strong> the historical average.
         </p>
       ) : (
         <p className="ew-card-body ew-card-body--muted">
-          <strong>{card.callahan_label}</strong> acceleration is within normal historical range.
+          <strong>{card.metric_label}</strong> acceleration is within normal historical range.
         </p>
       )}
 
@@ -117,14 +117,14 @@ function DivergenceCard({ card }) {
 
       {hasAlert && card.inst_cumulative_change != null ? (
         <p className="ew-card-body">
-          Your <strong>{card.callahan_label}</strong> rose{' '}
+          Your <strong>{card.metric_label}</strong> rose{' '}
           <strong>{fmtPts(card.inst_cumulative_change)}</strong> over 4 quarters while peers rose{' '}
           <strong>{fmtPts(card.peer_cumulative_change)}</strong>. You have accumulated{' '}
           <strong>{fmtPts(card.total_divergence)}</strong> of adverse divergence from your peer group.
         </p>
       ) : (
         <p className="ew-card-body ew-card-body--muted">
-          <strong>{card.callahan_label}</strong> is tracking in line with peer movement over the last 4 quarters.
+          <strong>{card.metric_label}</strong> is tracking in line with peer movement over the last 4 quarters.
         </p>
       )}
 
@@ -171,13 +171,13 @@ function ProjectionCard({ card }) {
 
       {isBreached ? (
         <p className="ew-card-body">
-          Your <strong>{card.callahan_label}</strong> has already reached the{' '}
+          Your <strong>{card.metric_label}</strong> has already reached the{' '}
           <strong>{fmtPct(card.threshold_value)}</strong> examiner threshold.{' '}
           <strong>Review with your risk committee before this occurs.</strong>
         </p>
       ) : hasAlert && qtrs != null ? (
         <p className="ew-card-body">
-          At your current trajectory, your <strong>{card.callahan_label}</strong> would reach
+          At your current trajectory, your <strong>{card.metric_label}</strong> would reach
           the <strong>{fmtPct(card.threshold_value)} examiner threshold</strong> in approximately{' '}
           <strong>{Math.round(qtrs)} quarter{Math.round(qtrs) !== 1 ? 's' : ''}</strong>. This is a
           linear projection.{' '}
@@ -185,7 +185,7 @@ function ProjectionCard({ card }) {
         </p>
       ) : (
         <p className="ew-card-body ew-card-body--muted">
-          <strong>{card.callahan_label}</strong> is not on a trajectory toward the{' '}
+          <strong>{card.metric_label}</strong> is not on a trajectory toward the{' '}
           {card.threshold_value != null ? fmtPct(card.threshold_value) : 'regulatory'} threshold
           based on the current 4-quarter trend.
         </p>

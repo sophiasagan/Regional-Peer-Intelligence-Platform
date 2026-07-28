@@ -372,7 +372,7 @@ async def get_share_trend(
     geo_level: str = Query(...),
     geo_id: str = Query(...),
     period: str = Query(..., description="Most recent period"),
-    n_periods: int = Query(default=12, description="Number of periods (default 12 per Callahan convention)"),
+    n_periods: int = Query(default=12, description="Number of periods (default 3 years / 12 quarters)"),
 ):
     """Deposit share over time — long-form response for PeerBandChart trend view."""
     tenant_id = request.state.tenant_id

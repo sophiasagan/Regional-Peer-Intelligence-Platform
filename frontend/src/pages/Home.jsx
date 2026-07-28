@@ -39,7 +39,7 @@ const FEATURES = [
     title: 'Ask Intelligence',
     color: '#00696E',
     bg: '#E0F2F1',
-    desc: 'Natural language queries using Callahan metric names. Charts auto-generated.',
+    desc: 'Natural language queries about your institution and peer group. Charts auto-generated.',
   },
   {
     to: '/reports',
@@ -50,12 +50,12 @@ const FEATURES = [
     desc: 'One-click board reports and risk committee memos with AI narratives.',
   },
   {
-    to: '/onboarding/callahan',
+    to: '/peer-group-setup',
     icon: '🔀',
     title: 'Peer Group Setup',
     color: '#37474F',
     bg: '#ECEFF1',
-    desc: 'Migrate Callahan peer groups or configure regional benchmarks.',
+    desc: 'Configure your peer group — asset tier, states, and regional benchmarks.',
   },
 ];
 

@@ -1,8 +1,8 @@
 """Router: /ask — natural language competitive intelligence query.
 
-Accepts Callahan metric vocabulary and plain-language questions.
-Maps Callahan names to internal P76 metric names via CALLAHAN_TO_P76_METRIC_MAP.
-Always confirms which metric was matched: "Using: Total Delinquency Ratio (same as Callahan Delinquency Ratio)".
+Accepts standard credit union metric vocabulary and plain-language questions.
+Maps metric names to internal Magnus metric keys via INDUSTRY_METRIC_MAP.
+Always confirms which metric was matched: "Using: Total Delinquency Ratio".
 """
 
 from __future__ import annotations
@@ -26,13 +26,13 @@ router = APIRouter()
 DB_URL           = os.environ.get("DATABASE_URL")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-# ── Callahan vocabulary → P76 internal metric names ───────────────────────────
+# ── Standard industry vocabulary → Magnus internal metric names ───────────────
 #
 # Keys are lowercase; longest-match wins in resolve_metric().
-# P76 metric names on the right MUST match what compute_ratios() produces.
-# Spec aliases that differ from canonical names are normalized here.
+# Magnus metric names on the right MUST match what compute_ratios() produces.
+# Common metric aliases are normalized here.
 
-CALLAHAN_TO_P76_METRIC_MAP: dict[str, str] = {
+INDUSTRY_METRIC_MAP: dict[str, str] = {
     # ── Delinquency (spec entries, normalized to compute_ratios() names) ──
     "delinquency ratio":                             "delinq_rate_total",
     "delinquency rate":                              "delinq_rate_total",
@@ -100,9 +100,11 @@ CALLAHAN_TO_P76_METRIC_MAP: dict[str, str] = {
     "market share":                                  "deposit_market_share_pct",
 }
 
-# Reverse map: P76 metric → Callahan display name (for "Using: X" confirmation).
-# Only covers the most common metrics; others fall back to metric_name.
-_P76_TO_CALLAHAN_DISPLAY: dict[str, str] = {
+# Backward-compat alias — onboarding.py imports by old name
+CALLAHAN_TO_P76_METRIC_MAP = INDUSTRY_METRIC_MAP
+
+# Reverse map: Magnus metric key → display label shown to users.
+_METRIC_DISPLAY_NAMES: dict[str, str] = {
     "delinq_rate_total":               "Total Delinquency Ratio",
     "delinq_rate_90plus":              "90+ Day Delinquency",
     "delinq_rate_auto_total":          "Total Auto Loan Delinquency",
@@ -131,23 +133,23 @@ _P76_TO_CALLAHAN_DISPLAY: dict[str, str] = {
     "loan_market_share_pct":           "Loan Market Share",
 }
 
-# ── CALLAHAN_VOCABULARY_INSTRUCTION — injected into every Claude system prompt ─
+# ── VOCABULARY_INSTRUCTION — injected into every Claude system prompt ──────────
 #
 # Template variables (hydrated at call time):
 #   {tenant_cu_name}  — credit union name
 #   {tenant_state}    — state abbreviation
 #   {tenant_counties} — comma-separated primary market counties
 #   {tenant_peer_label} — default peer group description
-CALLAHAN_VOCABULARY_INSTRUCTION = """\
-You understand both P76 metric names and Callahan Associates metric names.
-When a user asks about a metric using Callahan's terminology, map it using \
-CALLAHAN_TO_P76_METRIC_MAP. Always confirm which metric you used:
-'Using: Total Delinquency Ratio (same as Callahan Delinquency Ratio)'
+VOCABULARY_INSTRUCTION = """\
+You understand standard credit union metric names used across the NCUA 5300 Call Report.
+When a user asks about a metric, identify the correct metric and confirm which one you used:
+'Using: Total Delinquency Ratio'
 
 The user's institution is: {tenant_cu_name} in {tenant_state}.
 Their primary markets: {tenant_counties}.
 Default peer group: regional ({tenant_state} CUs with branch presence in same markets).
 """
+VOCABULARY_INSTRUCTION = VOCABULARY_INSTRUCTION  # backward-compat alias
 
 
 # ── Tenant context ────────────────────────────────────────────────────────────
@@ -210,28 +212,24 @@ def _load_tenant_context(charter_number: Optional[int], period: Optional[str]) -
 # ── Metric resolution ─────────────────────────────────────────────────────────
 
 def resolve_metric(question: str) -> tuple[Optional[str], Optional[str]]:
-    """Return (p76_metric_name, matched_callahan_term). Longest-match wins."""
+    """Return (p76_metric_name, matched_matched_term). Longest-match wins."""
     lower_q = question.lower()
-    for callahan_term in sorted(CALLAHAN_TO_P76_METRIC_MAP, key=len, reverse=True):
-        if callahan_term in lower_q:
-            return CALLAHAN_TO_P76_METRIC_MAP[callahan_term], callahan_term
+    for matched_term in sorted(INDUSTRY_METRIC_MAP, key=len, reverse=True):
+        if matched_term in lower_q:
+            return INDUSTRY_METRIC_MAP[matched_term], matched_term
     return None, None
 
 
-def _confirmation_text(p76_metric: str, callahan_term: str) -> str:
-    """Build the standard "Using: X (same as Callahan Y)" confirmation string."""
-    callahan_display = _P76_TO_CALLAHAN_DISPLAY.get(p76_metric, p76_metric.replace("_", " ").title())
-    # Callahan display from the matched term — title-case it
-    matched_display = callahan_term.title()
-    if callahan_display.lower() == matched_display.lower():
-        return f"Using: {callahan_display}"
-    return f"Using: {callahan_display} (same as Callahan {matched_display})"
+def _confirmation_text(p76_metric: str, matched_term: str) -> str:
+    """Build the 'Using: X' confirmation string shown above the chart."""
+    display = _METRIC_DISPLAY_NAMES.get(p76_metric, p76_metric.replace("_", " ").title())
+    return f"Using: {display}"
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 def _build_system_prompt(tenant: TenantContext) -> str:
-    vocabulary = CALLAHAN_VOCABULARY_INSTRUCTION.format(
+    vocabulary = VOCABULARY_INSTRUCTION.format(
         tenant_cu_name=tenant.cu_name,
         tenant_state=tenant.state,
         tenant_counties=tenant.counties,
@@ -240,7 +238,7 @@ def _build_system_prompt(tenant: TenantContext) -> str:
     base = (
         "You are a credit union competitive intelligence analyst. "
         "Answer questions concisely using NCUA 5300 call report data. "
-        "Always state which metric you are discussing using Callahan's exact metric names. "
+        "Always state which metric you are discussing using standard credit union metric names. "
         "When comparing to peers, specify the peer group (Regional, State, or National Asset-Size). "
         "Be precise with numbers — include both dollar amounts and rates where relevant. "
         "Format percentages to three decimal places (e.g. 1.234%). "
@@ -265,8 +263,8 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer:              str
     matched_metric:      Optional[str] = None
-    callahan_term_used:  Optional[str] = None
-    confirmation_text:   Optional[str] = None   # "Using: Total Delinquency Ratio (same as Callahan ...)"
+    matched_term:        Optional[str] = None
+    confirmation_text:   Optional[str] = None   # "Using: Total Delinquency Ratio"
     data:                Optional[Any] = None
     sources:             list[str] = []
 
@@ -274,8 +272,8 @@ class QueryResponse(BaseModel):
 # ── Core query handler ────────────────────────────────────────────────────────
 
 async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse:
-    p76_metric, callahan_term = resolve_metric(query_req.question)
-    confirmation              = _confirmation_text(p76_metric, callahan_term) if p76_metric else None
+    p76_metric, matched_term = resolve_metric(query_req.question)
+    confirmation              = _confirmation_text(p76_metric, matched_term) if p76_metric else None
     tenant                    = _load_tenant_context(query_req.charter_number, query_req.period)
 
     # ── Pull supporting data when metric + charter + period are all known ──
@@ -370,7 +368,7 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
         p10  = data["peer_distribution"].get("p10")
         p90  = data["peer_distribution"].get("p90")
         pct_str = f"{data['percentile_rank']:.1f}th percentile" if data["percentile_rank"] is not None else "N/A"
-        label   = _P76_TO_CALLAHAN_DISPLAY.get(p76_metric, p76_metric)
+        label   = _METRIC_DISPLAY_NAMES.get(p76_metric, p76_metric)
         user_msg += (
             f"\n\nACTUAL DATA FROM DATABASE (use these exact figures in your answer):\n"
             f"  Metric: {label}\n"
@@ -397,7 +395,7 @@ async def run_nl_query(query_req: QueryRequest, tenant_id: str) -> QueryResponse
     return QueryResponse(
         answer=answer,
         matched_metric=p76_metric,
-        callahan_term_used=callahan_term,
+        matched_term_used=matched_term,
         confirmation_text=confirmation,
         data=data,
         sources=sources,

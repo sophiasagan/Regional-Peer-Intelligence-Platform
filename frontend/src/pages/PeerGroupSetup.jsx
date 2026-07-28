@@ -80,7 +80,7 @@ export default function PeerGroupSetup({ charterNumber, token, period = '2026Q1'
     setError(null);
     try {
       const res = await fetch(
-        `${API}/onboarding/callahan-peer-group?charter_number=${charterNumber}&period=${period}`,
+        `${API}/onboarding/build-peer-group?charter_number=${charterNumber}&period=${period}`,
         {
           method: 'POST',
           headers: {
@@ -267,7 +267,7 @@ export default function PeerGroupSetup({ charterNumber, token, period = '2026Q1'
             <tbody>
               {result.preview_metrics?.map(m => (
                 <tr key={m.p76_metric}>
-                  <td className="pgs-metric-name">{m.callahan_name}</td>
+                  <td className="pgs-metric-name">{m.metric_name}</td>
                   <td className="numeric">{fmtValue(m.institution_value, m.display_format)}</td>
                   <td className="numeric">{fmtValue(m.peer_median, m.display_format)}</td>
                   <td className="numeric muted">

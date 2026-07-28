@@ -58,9 +58,9 @@ def _tier_index(assets: float) -> int:
             return i
     return len(_ASSET_TIERS) - 1
 
-# Callahan display names for internal metric names
+# Display names for internal metric names
 METRIC_LABELS: dict[str, tuple[str, str]] = {
-    # (callahan_label, unit) — order controls display order in comparison table
+    # (metric_label, unit) — order controls display order in comparison table
     # Asset Quality
     "delinq_rate_total":               ("Total Delinquency Ratio",        "%"),
     "delinq_rate_90plus":              ("90+ Day Delinquency",            "%"),
@@ -100,7 +100,7 @@ DISPLAY_METRICS = list(METRIC_LABELS.keys())
 
 class MetricRow(BaseModel):
     metric_name: str
-    callahan_label: str
+    metric_label: str
     institution_value: Optional[float]
     peer_median: Optional[float]
     peer_p10: Optional[float]
@@ -350,14 +350,14 @@ async def get_peer_comparison(
 
     # Build metric rows
     metric_rows = []
-    for metric, (callahan_label, unit) in METRIC_LABELS.items():
+    for metric, (metric_label, unit) in METRIC_LABELS.items():
         inst_val = inst_row.get(metric)
         dist = compute_peer_distribution(metric, peer_charters, period, DB_URL, prior_period=prior_period)
 
         if dist["n"] == 0 or inst_val is None or __import__("math").isnan(float(inst_val if inst_val is not None else float("nan"))):
             metric_rows.append(MetricRow(
                 metric_name=metric,
-                callahan_label=callahan_label,
+                metric_label=metric_label,
                 institution_value=None,
                 peer_median=dist.get("p50"),
                 peer_p10=dist.get("p10"),
@@ -372,7 +372,7 @@ async def get_peer_comparison(
         pct_rank = rank_institution(float(inst_val), dist, metric)
         metric_rows.append(MetricRow(
             metric_name=metric,
-            callahan_label=callahan_label,
+            metric_label=metric_label,
             institution_value=float(inst_val),
             peer_median=dist.get("p50"),
             peer_p10=dist.get("p10"),
@@ -572,7 +572,7 @@ _SCHEDULE_DEFS: dict[str, list[tuple[str, str, bool, str]]] = {
 _GROUP_TYPE_MAP: dict[str, str] = {
     "REGIONAL":   "regional",
     "STATE":      "state",
-    "ASSET_SIZE": "callahan_national",
+    "ASSET_SIZE": "magnus_national",
     "CUSTOM":     "custom",
 }
 
@@ -921,7 +921,7 @@ async def get_single_metric_trend(
     return {
         "charter_number": charter_number,
         "metric": metric_name,
-        "callahan_label": METRIC_LABELS.get(metric_name, (metric_name, ""))[0],
+        "metric_label": METRIC_LABELS.get(metric_name, (metric_name, ""))[0],
         "peer_group_type": peer_group,
         "peer_group_label": label,
         "data": result_rows,

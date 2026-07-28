@@ -1,6 +1,6 @@
 """Geography-first peer group selection engine.
 
-Regional is ALWAYS the default. Callahan-style national asset-size groups
+Regional is ALWAYS the default. National asset-size groups
 are an alternative view only — never the default, always clearly labeled.
 
 Priority order for default peer group:
@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 _REGIONAL_STRESS_THRESHOLD = 0.10    # 10% above national = regional stress
 _INSTITUTION_STRESS_THRESHOLD = 0.10  # 10% above regional = institution-specific
 
-# Callahan asset tiers (used for get_callahan_style_peer_group)
-CALLAHAN_ASSET_TIERS: dict[str, tuple[float, float]] = {
+# National asset tiers for get_national_style_peer_group
+ASSET_TIER_RANGES: dict[str, tuple[float, float]] = {
     "under_250M": (0,                 250_000_000),
     "250M_1B":    (250_000_000,     1_000_000_000),
     "1B_5B":      (1_000_000_000,   5_000_000_000),
@@ -322,8 +322,8 @@ class PeerEngine:
             "asset_filter": False,  # explicitly no asset-size filter
         }
 
-    def get_callahan_style_peer_group(self, charter_number: str, asset_tier: str, period: str) -> dict:
-        """National peer group by Callahan asset tier.
+    def get_national_style_peer_group(self, charter_number: str, asset_tier: str, period: str) -> dict:
+        """National peer group by asset tier.
 
         Tiers: under_250M | 250M_1B | 1B_5B | over_5B
         ALWAYS labeled 'US CU [tier]' — never the default view.
@@ -331,13 +331,13 @@ class PeerEngine:
         Returns:
           peer_ids, peer_label, peer_count, geography_type, is_regional
         """
-        if asset_tier not in CALLAHAN_ASSET_TIERS:
+        if asset_tier not in ASSET_TIER_RANGES:
             raise ValueError(
                 f"Unknown asset_tier {asset_tier!r}. "
-                f"Valid: {list(CALLAHAN_ASSET_TIERS)}"
+                f"Valid: {list(ASSET_TIER_RANGES)}"
             )
 
-        lo, hi = CALLAHAN_ASSET_TIERS[asset_tier]
+        lo, hi = ASSET_TIER_RANGES[asset_tier]
         all_df = self._load_all(period)
         others = all_df[all_df["charter_number"] != int(charter_number)]
 
@@ -561,10 +561,9 @@ def get_asset_size_peers(charter_number: int, period: str, db_url: str | None = 
     assets = target.iloc[0]["acct_010"]
     if pd.isna(assets):
         return []
-    # Determine Callahan tier
-    tier = _callahan_tier_for_assets(float(assets))
+    tier = _national_tier_for_assets(float(assets))
     engine_obj = PeerEngine(db_url)
-    result = engine_obj.get_callahan_style_peer_group(str(charter_number), tier, period)
+    result = engine_obj.get_national_style_peer_group(str(charter_number), tier, period)
     return result["peer_ids"]
 
 
@@ -642,8 +641,8 @@ def _fmt_assets(v: float) -> str:
     return f"${v:,.0f}"
 
 
-def _callahan_tier_for_assets(assets: float) -> str:
-    for tier, (lo, hi) in CALLAHAN_ASSET_TIERS.items():
+def _national_tier_for_assets(assets: float) -> str:
+    for tier, (lo, hi) in ASSET_TIER_RANGES.items():
         if lo <= assets < hi:
             return tier
     return "over_5B"

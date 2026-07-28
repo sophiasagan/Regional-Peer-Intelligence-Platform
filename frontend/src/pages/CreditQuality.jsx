@@ -310,7 +310,7 @@ export default function CreditQuality({ charterNumber, token }) {
       '',
       'Metric,Your Value,Peer Median,Top Decile,Bottom Decile,Percentile,Stars',
       ...comparison.metrics.map(m => [
-        `"${m.callahan_label}"`,
+        `"${m.metric_label}"`,
         m.institution_value ?? '',
         m.peer_median        ?? '',
         m.peer_p90           ?? '',
@@ -429,7 +429,7 @@ export default function CreditQuality({ charterNumber, token }) {
         <div className="cq-card" ref={loanBreakdownRef}>
           <div className="cq-card-header">
             <span className="cq-card-title">Delinquency by Product</span>
-            <span className="cq-card-meta">Callahan · updates with peer group</span>
+            <span className="cq-card-meta">Updates with peer group</span>
           </div>
           <div className="cq-card-body">
             <LoanTypeBreakdownChart

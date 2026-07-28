@@ -1,19 +1,16 @@
-"""Router: /onboarding — Callahan migration flow (3-step wizard).
+"""Router: /onboarding — peer group configuration wizard.
 
-Step 1: POST /onboarding/callahan-peer-group
-        Build a Callahan-equivalent national peer group from asset tier + state + FOM.
-        Returns peer_group_id + preview of key metrics — numbers should match Callahan exactly.
+Step 1: POST /onboarding/build-peer-group
+        Build a national peer group from asset tier + state + FOM criteria.
+        Returns peer_group_id + preview of key metrics.
 
-Step 2: POST /onboarding/verify-callahan
-        Accept a Callahan CSV or XLSX export, parse it, and compare every metric
-        to P76's computed values for the same institution and period.
+Step 2: POST /onboarding/verify-benchmark
+        Accept a CSV/XLSX benchmark export, parse it, and compare every metric
+        to Magnus computed values for the same institution and period.
 
 Step 3: GET /onboarding/regional-context/{charter_number}
-        Return peer distributions for both the Callahan-equivalent national group
-        and the regional peer group, so Step 3 can layer the purple "Regional peers" line.
-
-CLAUDE.md: accessible from onboarding and settings. Never frame as
-"switching from" or "replacing" Callahan — additive positioning only.
+        Return peer distributions for both the national group and the regional
+        peer group, so Step 3 can layer the purple "Regional peers" line.
 """
 
 from __future__ import annotations
@@ -29,7 +26,7 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from api.routers.query import CALLAHAN_TO_P76_METRIC_MAP
+from api.routers.query import INDUSTRY_METRIC_MAP as CALLAHAN_TO_P76_METRIC_MAP
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,8 +53,8 @@ ASSET_TIER_DISPLAY: dict[str, str] = {
     "5b_plus":    "$5B+",
 }
 
-# Preview metrics for Step 1 table — subset Callahan prominently shows
-# (callahan_display, p76_key, display_format, is_adverse)
+# Preview metrics for Step 1 table — key metrics shown in peer comparison
+# (display_name, p76_key, display_format, is_adverse)
 PREVIEW_METRICS: list[tuple[str, str, str, bool]] = [
     ("Total Delinquency Ratio",   "delinq_rate_total",               "percent", True),
     ("Net Charge-Off Ratio",      "chargeoff_rate_total_annualized",  "percent", True),
@@ -76,7 +73,7 @@ class PeerGroupCriteria(BaseModel):
 
 
 class PreviewMetricRow(BaseModel):
-    callahan_name:   str
+    metric_name:     str
     p76_metric:      str
     institution_value: Optional[float]
     peer_p25:        Optional[float]
@@ -107,17 +104,17 @@ class PeerGroupBuildResponse(BaseModel):
 
 
 class ComparisonRow(BaseModel):
-    callahan_name:   str
-    callahan_column: str          # exact column name from the file
+    display_name:    str
+    source_column:   str          # exact column name from the uploaded file
     p76_metric:      str
-    callahan_value:  Optional[float]
+    benchmark_value: Optional[float]
     p76_value:       Optional[float]
     match:           Literal["exact", "close", "mismatch", "unmapped"]
-    delta:           Optional[float]    # p76_value - callahan_value
+    delta:           Optional[float]    # p76_value - benchmark_value
     display_format:  str
 
 
-class VerifyCallahanResponse(BaseModel):
+class VerifyBenchmarkResponse(BaseModel):
     rows:         list[ComparisonRow]
     n_exact:      int
     n_close:      int
@@ -157,7 +154,7 @@ def _build_peer_group(
     tenant_id: str,
     db_url: Optional[str],
 ) -> tuple[str, list[str], int]:
-    """Build or retrieve a Callahan-equivalent peer group. Returns (peer_group_id, charter_list, n)."""
+    """Build or retrieve a national peer group. Returns (peer_group_id, charter_list, n)."""
     from db import get_engine
 
     engine = get_engine(db_url)
@@ -262,7 +259,7 @@ def _compute_preview_metrics(
 
         peer_charters_int = [int(c) for c in peer_charters]
         result = []
-        for callahan_name, p76_key, fmt, is_adverse in PREVIEW_METRICS:
+        for metric_name, p76_key, fmt, is_adverse in PREVIEW_METRICS:
             inst_value = inst.get(p76_key)
             try:
                 dist = compute_peer_distribution(p76_key, peer_charters_int, period, db_url)
@@ -272,7 +269,7 @@ def _compute_preview_metrics(
                 dist, pctile, stars = {}, None, None
 
             result.append(PreviewMetricRow(
-                callahan_name     = callahan_name,
+                metric_name       = metric_name,
                 p76_metric        = p76_key,
                 institution_value = inst_value,
                 peer_p25          = dist.get("p25"),
@@ -289,20 +286,20 @@ def _compute_preview_metrics(
         return []
 
 
-# ── Callahan file parser (Step 2) ─────────────────────────────────────────────
+# ── Benchmark file parser (Step 2) ───────────────────────────────────────────
 
 def _normalize_col(s: str) -> str:
     return s.lower().strip().replace("-", " ").replace("_", " ").replace("  ", " ")
 
 
-def _match_callahan_column(col_name: str) -> Optional[str]:
-    """Map a Callahan column header to a P76 metric key. Longest match wins."""
+def _match_metric_column(col_name: str) -> Optional[str]:
+    """Map an uploaded file column header to an internal metric key. Longest match wins."""
     norm = _normalize_col(col_name)
     # Exact match first
     for k, v in CALLAHAN_TO_P76_METRIC_MAP.items():
         if _normalize_col(k) == norm:
             return v
-    # Substring: Callahan key contains the column name
+    # Substring match
     candidates = []
     for k, v in CALLAHAN_TO_P76_METRIC_MAP.items():
         kn = _normalize_col(k)
@@ -349,7 +346,7 @@ def _parse_csv_bytes(file_bytes: bytes) -> tuple[list[str], list[dict]]:
 
 
 def _find_institution_row(rows: list[dict], institution_name: str) -> Optional[dict]:
-    """Find the row for this institution in a multi-row Callahan export."""
+    """Find the row for this institution in a multi-row benchmark export."""
     if not rows:
         return None
     if len(rows) == 1:
@@ -375,7 +372,7 @@ def _find_institution_row(rows: list[dict], institution_name: str) -> Optional[d
 
 
 def _coerce_float(v) -> Optional[float]:
-    """Convert Callahan cell value to float (handles '2.45%', '$1,234,567', etc.)."""
+    """Convert a cell value to float (handles '2.45%', '$1,234,567', etc.)."""
     if v is None:
         return None
     if isinstance(v, (int, float)):
@@ -383,9 +380,8 @@ def _coerce_float(v) -> Optional[float]:
     s = str(v).strip().replace(",", "").replace("$", "").replace("%", "").strip()
     try:
         f = float(s)
-        # Callahan shows rates as percentages (e.g., 2.45 for 2.45%)
-        # P76 stores them as decimals (0.0245).
-        # We match on the display value level — convert Callahan % to decimal here.
+        # Rates are shown as percentages in exports (e.g., 2.45 for 2.45%)
+        # but stored as decimals (0.0245) internally.
         if "%" in str(v):
             return f / 100.0
         return f
@@ -394,21 +390,21 @@ def _coerce_float(v) -> Optional[float]:
 
 
 def _compare_values(
-    callahan_val: Optional[float],
+    benchmark_val: Optional[float],
     p76_val: Optional[float],
     display_format: str,
 ) -> tuple[Literal["exact", "close", "mismatch", "unmapped"], Optional[float]]:
-    if callahan_val is None or p76_val is None:
+    if benchmark_val is None or p76_val is None:
         return "unmapped", None
 
-    delta = p76_val - callahan_val
+    delta = p76_val - benchmark_val
 
     if display_format in ("percent", "ratio"):
         tol_exact = 0.0001   # 0.01 pp
         tol_close = 0.0005   # 0.05 pp
     else:
-        tol_exact = abs(callahan_val) * 0.001 if callahan_val != 0 else 1.0
-        tol_close = abs(callahan_val) * 0.005 if callahan_val != 0 else 5.0
+        tol_exact = abs(benchmark_val) * 0.001 if benchmark_val != 0 else 1.0
+        tol_close = abs(benchmark_val) * 0.005 if benchmark_val != 0 else 5.0
 
     if abs(delta) <= tol_exact:
         return "exact", delta
@@ -491,18 +487,17 @@ def _distribution_stats(
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.post("/callahan-peer-group", response_model=PeerGroupBuildResponse)
-async def build_callahan_peer_group(
+@router.post("/build-peer-group", response_model=PeerGroupBuildResponse)
+async def build_peer_group_endpoint(
     request: Request,
     criteria: PeerGroupCriteria,
     charter_number: int = Query(...),
     period: str = Query(..., description="e.g. 2026Q1"),
 ):
-    """Step 1 — Build a Callahan-equivalent national peer group.
+    """Step 1 — Build a national peer group from asset tier + state + optional FOM criteria.
 
-    Takes the same criteria used in Callahan (asset tier + state + optional FOM)
-    and creates a P76 peer group that mirrors it exactly.
-    Returns preview metrics so the user can confirm the numbers match.
+    Returns the matched peer institutions and a preview of key metrics so the
+    user can confirm the group looks right before proceeding.
     """
     tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
 
@@ -570,19 +565,18 @@ async def build_callahan_peer_group(
     )
 
 
-@router.post("/verify-callahan", response_model=VerifyCallahanResponse)
-async def verify_callahan(
+@router.post("/verify-benchmark", response_model=VerifyBenchmarkResponse)
+async def verify_benchmark(
     request: Request,
     file: UploadFile,
     charter_number: int = Form(...),
     period: str = Form(...),
     peer_group_id: str = Form(default=""),
 ):
-    """Step 2 — Parse a Callahan export and compare every metric to P76's values.
+    """Step 2 — Parse an uploaded benchmark export and compare every metric to Magnus values.
 
-    Accepts .csv or .xlsx files from Callahan downloads.
-    Maps column names using CALLAHAN_TO_P76_METRIC_MAP.
-    Shows Callahan value vs P76 value side-by-side.
+    Accepts .csv or .xlsx files. Maps column names using the industry metric vocabulary.
+    Shows uploaded value vs Magnus computed value side-by-side.
     """
     tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
 
@@ -601,7 +595,7 @@ async def verify_callahan(
     if not data_rows:
         raise HTTPException(status_code=422, detail="File appears to be empty or unreadable.")
 
-    # Find institution's row (Callahan exports may be multi-institution peer downloads)
+    # Find institution's row (exports may be multi-institution peer downloads)
     from db import get_engine
     engine = get_engine(DB_URL)
     with engine.connect() as conn:
@@ -611,29 +605,29 @@ async def verify_callahan(
         ).mappings().first()
     institution_name = inst_row["institution_name"] if inst_row else f"Charter {charter_number}"
 
-    callahan_row = _find_institution_row(data_rows, institution_name)
-    institution_row_found = callahan_row is not None
+    benchmark_row = _find_institution_row(data_rows, institution_name)
+    institution_row_found = benchmark_row is not None
     if not institution_row_found:
-        callahan_row = data_rows[0]   # use first row as fallback
+        benchmark_row = data_rows[0]   # use first row as fallback
 
-    # Compute P76 values
+    # Compute Magnus values
     p76_values = _compute_p76_values(charter_number, period, DB_URL)
 
-    # Build comparison rows — one per column in the Callahan file
+    # Build comparison rows — one per column in the uploaded file
     comparison_rows: list[ComparisonRow] = []
     for col in headers:
         if not col or col.startswith("__col"):
             continue
-        p76_metric = _match_callahan_column(col)
-        raw_val    = callahan_row.get(col) if callahan_row else None
-        callahan_val = _coerce_float(raw_val)
+        p76_metric = _match_metric_column(col)
+        raw_val       = benchmark_row.get(col) if benchmark_row else None
+        benchmark_val = _coerce_float(raw_val)
 
         if p76_metric is None:
             comparison_rows.append(ComparisonRow(
-                callahan_name   = col,
-                callahan_column = col,
+                display_name    = col,
+                source_column   = col,
                 p76_metric      = "—",
-                callahan_value  = callahan_val,
+                benchmark_value = benchmark_val,
                 p76_value       = None,
                 match           = "unmapped",
                 delta           = None,
@@ -655,12 +649,12 @@ async def verify_callahan(
         else:
             fmt = "percent"
 
-        match_result, delta = _compare_values(callahan_val, p76_val, fmt)
+        match_result, delta = _compare_values(benchmark_val, p76_val, fmt)
         comparison_rows.append(ComparisonRow(
-            callahan_name   = col,
-            callahan_column = col,
+            display_name    = col,
+            source_column   = col,
             p76_metric      = p76_metric,
-            callahan_value  = callahan_val,
+            benchmark_value = benchmark_val,
             p76_value       = p76_val,
             match           = match_result,
             delta           = delta,
@@ -668,7 +662,7 @@ async def verify_callahan(
         ))
 
     # Remove empty/unmeaningful rows
-    comparison_rows = [r for r in comparison_rows if r.callahan_value is not None or r.p76_value is not None]
+    comparison_rows = [r for r in comparison_rows if r.benchmark_value is not None or r.p76_value is not None]
 
     # Sort: mismatches first, then close, then exact, then unmapped
     _order = {"mismatch": 0, "close": 1, "exact": 2, "unmapped": 3}
@@ -681,7 +675,7 @@ async def verify_callahan(
     all_match  = n_mismatch == 0 and n_close == 0
 
     if all_match:
-        note = "Every metric matches exactly. You're seeing the same numbers Callahan shows."
+        note = "Every metric matches exactly — Magnus and the uploaded file are in full agreement."
     elif n_mismatch == 0:
         note = f"{n_exact} of {n_exact + n_close} metrics match exactly; {n_close} differ by rounding only (< 0.05 pp)."
     else:
@@ -690,7 +684,7 @@ async def verify_callahan(
             f"{n_mismatch} metric(s) differ more than 0.05 pp — check that period and peer group criteria match."
         )
 
-    return VerifyCallahanResponse(
+    return VerifyBenchmarkResponse(
         rows                   = comparison_rows,
         n_exact                = n_exact,
         n_close                = n_close,
@@ -766,7 +760,7 @@ async def get_metric_trend_onboarding(
             "peer_count": dist.get("n", 0),
         })
 
-    callahan_label, unit = METRIC_LABELS.get(metric_name, (metric_name, "%"))
+    metric_label, unit = METRIC_LABELS.get(metric_name, (metric_name, "%"))
 
     # Look up peer institution names for the list display
     peer_details = []
@@ -789,7 +783,7 @@ async def get_metric_trend_onboarding(
     return {
         "charter_number":   charter_number,
         "metric":           metric_name,
-        "callahan_label":   callahan_label,
+        "metric_label":     metric_label,
         "unit":             unit,
         "peer_group_type":  peer_group,
         "peer_group_label": label,
@@ -806,10 +800,10 @@ async def get_regional_context(
     metric: str = Query(default="delinq_rate_total"),
     national_peer_group_id: str = Query(default=""),
 ):
-    """Step 3 — Return both national (Callahan-equivalent) and regional peer distributions.
+    """Step 3 — Return both national and regional peer distributions.
 
     Powers the PeerBandChart that shows the institution with two peer bands:
-      National band (blue) = Callahan-equivalent peer group from Step 1
+      National band (blue) = national peer group from Step 1
       Regional line (purple) = institutions in same geographic market
     """
     tenant_id = getattr(request.state, "tenant_id", None) or "anonymous"
@@ -830,7 +824,7 @@ async def get_regional_context(
         ).mappings().first()
     inst_state = inst_row["state_code"] if inst_row else None
 
-    # National peer group (Callahan-equivalent from Step 1)
+    # National peer group from Step 1
     nat_dist: Optional[DistributionStats] = None
     if national_peer_group_id:
         with engine.connect() as conn:

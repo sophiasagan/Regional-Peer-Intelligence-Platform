@@ -171,7 +171,7 @@ def _claude(prompt: str, max_words: int = 180) -> str:
             system=(
                 "You are a credit union risk management report writer. "
                 "Write in the voice of an experienced credit risk officer. "
-                "Use Callahan Associates metric terminology. Be specific about numbers. "
+                "Use standard credit union metric terminology. Be specific about numbers. "
                 "Write in present tense. No markdown formatting."
             ),
             messages=[{"role": "user", "content": prompt}],
@@ -540,7 +540,7 @@ def _gen_watch_items(
         f"{context}\n\n"
         "For each item, output in exactly this format:\n"
         "ITEM 1:\n"
-        "Metric: [metric name using Callahan terminology]\n"
+        "Metric: [metric name]\n"
         "Current Value: [specific number]\n"
         "Peer Context: [how it compares to regional peers — be specific with numbers]\n"
         "Recommended Action: [one specific, actionable management step]\n\n"
