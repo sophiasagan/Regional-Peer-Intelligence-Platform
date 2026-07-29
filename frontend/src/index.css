@@ -1046,7 +1046,7 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .cq-quiet-status {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
   padding: 7px 28px;
   font-size: 13px;
   color: var(--text-muted);
@@ -1059,11 +1059,6 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .cq-quiet-check {
   color: var(--color-teal);
   font-size: 11px;
-}
-.cq-quiet-sep {
-  color: var(--text-muted);
-  font-size: 14px;
-  padding: 0 4px;
 }
 
 /* ── 3. KPI card peer-median tooltip ─────────────────────────────────────────

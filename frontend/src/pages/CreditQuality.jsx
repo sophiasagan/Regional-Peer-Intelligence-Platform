@@ -259,14 +259,11 @@ function QuietStatusLine({ ewData }) {
 
   return (
     <div className="cq-quiet-status" aria-label="Normal early-warning panels">
-      {quietPanels.map((p, i) => (
-        <React.Fragment key={p.type}>
-          {i > 0 && <span className="cq-quiet-sep" aria-hidden>·</span>}
-          <span className="cq-quiet-item">
-            <span className="cq-quiet-check" aria-hidden>✓</span>
-            {PANEL_QUIET_LABELS[p.type]} normal
-          </span>
-        </React.Fragment>
+      {quietPanels.map(p => (
+        <span key={p.type} className="cq-quiet-item">
+          <span className="cq-quiet-check" aria-hidden>✓</span>
+          {PANEL_QUIET_LABELS[p.type]} normal
+        </span>
       ))}
     </div>
   );
