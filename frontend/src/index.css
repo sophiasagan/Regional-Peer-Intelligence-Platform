@@ -1000,3 +1000,172 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .rp-placeholder-line--narrow { width: 45%; }
 .rp-placeholder-chart { height: 80px; background: linear-gradient(to right, #EEF2FF, #E5E7EB, #EEF2FF); border-radius: 4px; margin: 6px 0; }
 .rp-section-generate-cta { font-size: 11px; color: #6366F1; font-style: italic; }
+
+/* ═══ CreditQuality page — P76 layout additions ══════════════════════════════ */
+
+/* ── Early warning panel: elevated (watch/alert) modifier ─────────────────── */
+.ew-panel--elevated { border-color: #FCD34D; }  /* amber border for watch/alert */
+
+/* ── 1. Urgent alert banner ──────────────────────────────────────────────────
+   Full-width strip between the top bar and the rest of the page.
+   Uses existing --color-red / --bg-red tokens (same as the Urgent badge). */
+.cq-urgent-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 28px;
+  background: var(--bg-red);
+  border-bottom: 2px solid #EF9A9A;
+  border-top: 2px solid #EF9A9A;
+}
+.cq-urgent-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  color: var(--color-red);
+}
+.cq-urgent-body {
+  flex: 1;
+  font-size: 14px;
+  color: var(--color-red);
+  line-height: 1.4;
+}
+.cq-urgent-more {
+  font-size: 13px;
+  font-weight: 400;
+  opacity: .8;
+}
+.cq-urgent-action {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+/* ── 2b. Quiet status line — checkmarks for normal panels ────────────────────
+   Small, low-contrast inline line. Only appears when all panels are "none". */
+.cq-quiet-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 28px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cq-quiet-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cq-quiet-check {
+  color: var(--color-teal);
+  font-size: 11px;
+}
+.cq-quiet-sep {
+  color: var(--border);
+  font-size: 14px;
+}
+
+/* ── 3. KPI card peer-median tooltip ─────────────────────────────────────────
+   (i) button in the KPI footer; tooltip appears above on hover. */
+.kpi-info-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;   /* push to right edge of flex row */
+}
+.kpi-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-gray);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+  font-family: Georgia, serif;
+  cursor: default;
+  flex-shrink: 0;
+  user-select: none;
+}
+.kpi-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  background: #323232;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-family: 'Calibri', 'Segoe UI', system-ui, sans-serif;
+  padding: 5px 9px;
+  border-radius: 5px;
+  pointer-events: none;
+  z-index: 100;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.kpi-info-wrap:hover .kpi-tooltip { display: block; }
+
+/* ── 4. "More metrics" dropdown ──────────────────────────────────────────────
+   Positioned relative to the trigger button; closes on outside click (JS). */
+.more-metrics-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.more-metrics-btn {
+  /* inherits .metric-tab — just adds chevron spacing */
+}
+.more-metrics-chevron {
+  font-size: 9px;
+  opacity: .7;
+}
+.more-metrics-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.more-metrics-divider {
+  padding: 6px 14px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.more-metrics-divider:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+.more-metrics-item {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.more-metrics-item:hover { background: var(--bg-gray); }
+.more-metrics-item.active { background: #E8EAF6; color: #1A237E; font-weight: 600; }

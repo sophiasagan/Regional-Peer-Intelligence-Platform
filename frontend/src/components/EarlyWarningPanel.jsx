@@ -215,6 +215,8 @@ function ProjectionCard({ card }) {
 
 // ── Main panel ────────────────────────────────────────────────────────────────
 
+const LEVEL_ORDER = { none: 0, watch: 1, alert: 2, urgent: 3 };
+
 export default function EarlyWarningPanel({
   charterNumber,
   period,
@@ -223,19 +225,35 @@ export default function EarlyWarningPanel({
   // Optional: pre-fetched legacy alerts from parent — used only to expand before
   // our own fetch resolves, not for rendering the cards themselves.
   alerts,
+  // NEW: pre-fetched EW data from the page-level useEarlyWarning hook.
+  // When provided the component skips its own fetch (no duplicate request).
+  ewData: ewDataProp = null,
+  // NEW: when true, renders the card grid directly with no collapsible toggle.
+  // Used when CreditQuality manages the layout (urgent banner + this managed panel).
+  managed = false,
+  // NEW: only show cards whose alert_level is in this array.
+  // null = show all. E.g. ['watch','alert','urgent'] hides 'none' panels.
+  visibleLevels = null,
 }) {
-  const [data,     setData]     = useState(null);
+  const [data,     setData]     = useState(ewDataProp ?? null);
   const [loading,  setLoading]  = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(managed);
+
+  // Sync prop changes (ewDataProp updates when period/peerGroup changes)
+  useEffect(() => {
+    if (ewDataProp != null) setData(ewDataProp);
+  }, [ewDataProp]);
 
   // Auto-expand early if parent already has active legacy alerts
   useEffect(() => {
-    if (alerts && Array.isArray(alerts) && alerts.length > 0) {
+    if (!managed && alerts && Array.isArray(alerts) && alerts.length > 0) {
       setExpanded(true);
     }
-  }, [alerts]);
+  }, [alerts, managed]);
 
   useEffect(() => {
+    // Skip self-fetch when caller supplies pre-fetched data
+    if (ewDataProp != null) return;
     if (!charterNumber || !period) return;
     setLoading(true);
 
@@ -247,13 +265,52 @@ export default function EarlyWarningPanel({
       .then(d => {
         if (d) {
           setData(d);
-          if (d.has_active_alerts) setExpanded(true);
+          if (!managed && d.has_active_alerts) setExpanded(true);
         }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [charterNumber, period, peerGroup, token]);
+  }, [charterNumber, period, peerGroup, token, ewDataProp, managed]);
 
+  // ── Managed mode — no toggle, renders only the filtered card grid ──────────
+  if (managed) {
+    if (!data) return null;
+
+    const cards = [
+      { key: 'acceleration', card: data.acceleration, Component: AccelerationCard },
+      { key: 'divergence',   card: data.divergence,   Component: DivergenceCard   },
+      { key: 'projection',   card: data.projection,   Component: ProjectionCard   },
+    ].filter(({ card }) =>
+      card && (!visibleLevels || visibleLevels.includes(card.alert_level))
+    );
+
+    if (cards.length === 0) return null;
+
+    const maxLevelOrder = cards.reduce(
+      (max, { card }) => Math.max(max, LEVEL_ORDER[card.alert_level] ?? 0),
+      0,
+    );
+    const panelMod = maxLevelOrder >= LEVEL_ORDER.urgent
+      ? 'ew-panel--active'
+      : maxLevelOrder >= LEVEL_ORDER.watch
+        ? 'ew-panel--elevated'
+        : 'ew-panel--quiet';
+
+    return (
+      <div className={`ew-panel ${panelMod}`}>
+        <div
+          className="ew-cards-grid"
+          style={{ gridTemplateColumns: `repeat(${cards.length}, 1fr)` }}
+        >
+          {cards.map(({ key, card, Component }) => (
+            <Component key={key} card={card} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Standard (non-managed) mode — collapsible toggle ──────────────────────
   if (!data && !loading) return null;
 
   const hasActive = data?.has_active_alerts ?? false;

@@ -82,14 +82,24 @@ export default function KpiCard({
         <TrendArrow qoqChange={qoqChange} isAdverse={isAdverse} />
       </div>
 
-      <div className="kpi-peer">
-        Peer median: <strong>{fmtValue(peerMedian, unit)}</strong>
-      </div>
-
       <div className="kpi-footer">
         <Stars count={stars} />
         {percentileRank != null && (
           <span className="kpi-percentile">{Math.round(percentileRank)}th pctile</span>
+        )}
+        {peerMedian != null && (
+          <div className="kpi-info-wrap">
+            <span
+              className="kpi-info-btn"
+              tabIndex={-1}
+              aria-label={`Peer median: ${fmtValue(peerMedian, unit)}`}
+            >
+              i
+            </span>
+            <span className="kpi-tooltip">
+              Peer median: {fmtValue(peerMedian, unit)}
+            </span>
+          </div>
         )}
       </div>
     </div>

@@ -1,8 +1,12 @@
 /**
  * CreditQuality — primary credit quality dashboard.
  *
- * Layout: sticky top bar → KPI row → Early Warning (if alerts) →
- *   [Trend chart card] → [Delinquency by Product card] → [Peer Comparison card]
+ * Layout (P76 hierarchy):
+ *   1. Urgent alert banner   — full-width, conditional on alert_level === "urgent"
+ *   2. Early warning section — expanded cards for watch/alert/urgent; quiet status line for none
+ *   3. KPI cards             — value + stars + percentile; peer median in (i) tooltip
+ *   4. Metric chip row       — 4 primary KPIs always visible; everything else in "More metrics" dropdown
+ *   5. Trend chart           — PeerBandChart (unchanged)
  *
  * P76 exclusive features (always present, clearly labeled):
  *   EarlyWarningPanel  — "Know before your examiner does"
@@ -34,7 +38,7 @@ const SIGNAL_METRICS = new Set([
   'delinq_rate_first_mortgage', 'delinq_rate_commercial', 'delinq_rate_commercial_re',
 ]);
 
-// KPI cards — exact Callahan labels
+// KPI cards — exact Callahan labels. These 4 are also the always-visible chips.
 const KPI_DEFS = [
   { metric: 'delinq_rate_total',               label: 'Total Delinquency Ratio',   unit: '%', adverse: true  },
   { metric: 'delinq_rate_90plus',              label: '90+ Day Delinquency',        unit: '%', adverse: true  },
@@ -89,6 +93,27 @@ const PERIOD_OPTIONS = [
   { label: '5Y', nPeriods: 20 },
 ];
 
+// Primary chips — the 4 KPI metrics (match KPI_DEFS order)
+const PRIMARY_VALUES = new Set(KPI_DEFS.map(d => d.metric));
+
+// Build "More metrics" menu items, preserving group headers but skipping any
+// header whose entire group is in the primary set.
+const MORE_TABS = (() => {
+  const out = [];
+  let pendingDivider = null;
+  for (const tab of METRIC_TABS) {
+    if (tab.divider) {
+      pendingDivider = tab;
+    } else if (!PRIMARY_VALUES.has(tab.value)) {
+      if (pendingDivider) { out.push(pendingDivider); pendingDivider = null; }
+      out.push(tab);
+    }
+  }
+  return out;
+})();
+
+const MORE_VALUES = new Set(MORE_TABS.filter(t => !t.divider).map(t => t.value));
+
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
 function useInstitutionInfo(charterNumber, period, token) {
@@ -138,7 +163,115 @@ function useAlerts(charterNumber, period, peerGroup, token) {
   return alerts;
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────
+// Lifted to page level so we can derive the urgency signal before EarlyWarningPanel renders.
+function useEarlyWarning(charterNumber, period, peerGroup, token) {
+  const [ewData, setEwData] = useState(null);
+  useEffect(() => {
+    if (!charterNumber || !period) return;
+    setEwData(null);
+    const params = new URLSearchParams({ period, peer_group: peerGroup });
+    fetch(`${API}/alerts/${charterNumber}/early-warning?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setEwData(d))
+      .catch(console.error);
+  }, [charterNumber, period, peerGroup, token]);
+  return ewData;
+}
+
+// ── Section 1 — Urgent alert banner ───────────────────────────────────────
+
+function fmtPct(v) {
+  if (v == null || isNaN(v)) return '—';
+  return `${(v * 100).toFixed(2)}%`;
+}
+
+function buildUrgentText(type, card) {
+  const val = fmtPct(card.institution_value ?? card.current_value);
+  if (type === 'projection' && card.already_breached) {
+    return `${card.metric_label} has reached the ${fmtPct(card.threshold_value)} examiner threshold — currently ${fmtPct(card.current_value)}`;
+  }
+  if (type === 'projection' && card.quarters_to_threshold != null) {
+    const q = Math.round(card.quarters_to_threshold);
+    return `${card.metric_label} on track to reach ${fmtPct(card.threshold_value)} in ~${q} quarter${q !== 1 ? 's' : ''} — currently ${fmtPct(card.current_value)}`;
+  }
+  if (type === 'acceleration' && card.acceleration_ratio != null) {
+    return `${card.metric_label} rising at ${card.acceleration_ratio.toFixed(1)}× the historical rate — currently ${val}`;
+  }
+  if (type === 'divergence') {
+    return `${card.metric_label} diverging from peers — currently ${val}`;
+  }
+  return `${card.metric_label} — currently ${val}`;
+}
+
+function UrgentBanner({ ewData, onReviewDetail }) {
+  if (!ewData) return null;
+  const urgentCards = [
+    ewData.acceleration && { type: 'acceleration', ...ewData.acceleration },
+    ewData.divergence   && { type: 'divergence',   ...ewData.divergence   },
+    ewData.projection   && { type: 'projection',   ...ewData.projection   },
+  ].filter(c => c && c.alert_level === 'urgent');
+
+  if (urgentCards.length === 0) return null;
+  const primary = urgentCards[0];
+
+  return (
+    <div className="cq-urgent-banner" role="alert">
+      <span className="cq-urgent-icon" aria-hidden>⚠</span>
+      <div className="cq-urgent-body">
+        <strong>{buildUrgentText(primary.type, primary)}</strong>
+        {urgentCards.length > 1 && (
+          <span className="cq-urgent-more">
+            {' '}+{urgentCards.length - 1} more signal{urgentCards.length - 1 > 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="btn btn--danger cq-urgent-action"
+        onClick={onReviewDetail}
+      >
+        Review detail ↓
+      </button>
+    </div>
+  );
+}
+
+// ── Section 2b — Quiet status line for normal panels ─────────────────────
+
+const PANEL_QUIET_LABELS = {
+  acceleration: 'Trend acceleration',
+  divergence:   'Peer divergence',
+  projection:   'Threshold projection',
+};
+
+function QuietStatusLine({ ewData }) {
+  if (!ewData) return null;
+  const quietPanels = [
+    ewData.acceleration && { type: 'acceleration', level: ewData.acceleration.alert_level },
+    ewData.divergence   && { type: 'divergence',   level: ewData.divergence.alert_level   },
+    ewData.projection   && { type: 'projection',   level: ewData.projection.alert_level   },
+  ].filter(c => c && c.level === 'none');
+
+  if (quietPanels.length === 0) return null;
+
+  return (
+    <div className="cq-quiet-status" aria-label="Normal early-warning panels">
+      {quietPanels.map((p, i) => (
+        <React.Fragment key={p.type}>
+          {i > 0 && <span className="cq-quiet-sep" aria-hidden>·</span>}
+          <span className="cq-quiet-item">
+            <span className="cq-quiet-check" aria-hidden>✓</span>
+            {PANEL_QUIET_LABELS[p.type]} normal
+          </span>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ── Section 3 — KPI row ────────────────────────────────────────────────────
 
 function TopBar({
   institutionName, stateAbbrev,
@@ -227,40 +360,78 @@ function KpiRow({ metrics, comparison }) {
   );
 }
 
-function MetricTabs({ activeMetric, onSelect, comparison }) {
-  const byName = Object.fromEntries(
-    (comparison?.metrics ?? []).map(m => [m.metric_name, m])
-  );
+// ── Section 4 — Metric chip selector ──────────────────────────────────────
+
+function MetricSelector({ activeMetric, onSelect }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function handleOutside(e) {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [moreOpen]);
+
+  const activeMoreLabel = MORE_VALUES.has(activeMetric)
+    ? MORE_TABS.find(t => !t.divider && t.value === activeMetric)?.label
+    : null;
+
   return (
     <div className="metric-tabs" role="tablist" aria-label="Select metric">
-      {METRIC_TABS.map((tab, i) => {
-        if (tab.divider) {
-          return (
-            <span key={`div-${i}`} className="metric-tab-divider" aria-hidden>
-              {tab.label}
-            </span>
-          );
-        }
-        const m      = byName[tab.value];
-        const stars  = m?.stars;
-        const active = activeMetric === tab.value;
-        return (
-          <button
-            key={tab.value}
-            role="tab"
-            aria-selected={active}
-            className={`metric-tab${active ? ' active' : ''}`}
-            onClick={() => onSelect(tab.value)}
-          >
-            {tab.label}
-            {stars != null && !active && (
-              <span className="tab-stars" aria-hidden>
-                {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
-              </span>
-            )}
-          </button>
-        );
-      })}
+      {/* Primary chips — 4 KPI metrics, no stars */}
+      {KPI_DEFS.map(def => (
+        <button
+          key={def.metric}
+          role="tab"
+          aria-selected={activeMetric === def.metric}
+          className={`metric-tab${activeMetric === def.metric ? ' active' : ''}`}
+          onClick={() => onSelect(def.metric)}
+        >
+          {def.label}
+        </button>
+      ))}
+
+      {/* More metrics dropdown */}
+      <div className="more-metrics-wrap" ref={moreRef}>
+        <button
+          type="button"
+          className={`metric-tab more-metrics-btn${activeMoreLabel ? ' active' : ''}`}
+          onClick={() => setMoreOpen(o => !o)}
+          aria-haspopup="listbox"
+          aria-expanded={moreOpen}
+        >
+          {activeMoreLabel ?? 'More metrics'}
+          <span className="more-metrics-chevron" aria-hidden>{moreOpen ? ' ▲' : ' ▼'}</span>
+        </button>
+
+        {moreOpen && (
+          <div className="more-metrics-menu" role="listbox">
+            {MORE_TABS.map((tab, i) => {
+              if (tab.divider) {
+                return (
+                  <div key={`div-${i}`} className="more-metrics-divider">
+                    {tab.label}
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={tab.value}
+                  role="option"
+                  aria-selected={activeMetric === tab.value}
+                  className={`more-metrics-item${activeMetric === tab.value ? ' active' : ''}`}
+                  onClick={() => { onSelect(tab.value); setMoreOpen(false); }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -286,10 +457,17 @@ export default function CreditQuality({ charterNumber, token }) {
   const [geographyId,   setGeographyId]   = useState(null);
 
   const loanBreakdownRef = useRef(null);
+  const ewDetailRef      = useRef(null);
 
   const instInfo   = useInstitutionInfo(charterNumber, period, token);
   const comparison = usePeerComparison(charterNumber, period, peerGroup, token, customCharters);
   const alerts     = useAlerts(charterNumber, period, peerGroup, token);
+  const ewData     = useEarlyWarning(charterNumber, period, peerGroup, token);
+
+  // True when at least one EW panel is above "none" — drives whether the detailed panel renders
+  const hasElevated = ewData != null && [
+    ewData.acceleration, ewData.divergence, ewData.projection,
+  ].some(c => c && c.alert_level !== 'none');
 
   useEffect(() => {
     if (instInfo?.state_abbrev && !geographyId) {
@@ -345,36 +523,47 @@ export default function CreditQuality({ charterNumber, token }) {
         onDownload={handleDownload}
       />
 
-      {/* ── KPI row ── */}
-      <KpiRow metrics={KPI_DEFS} comparison={comparison} />
+      {/* ── 1. Urgent alert banner — conditional, full width ── */}
+      <UrgentBanner
+        ewData={ewData}
+        onReviewDetail={() => ewDetailRef.current?.scrollIntoView({ behavior: 'smooth' })}
+      />
 
-      {/* ── Early warning — P76 exclusive ── */}
-      <div className="cq-alerts-area">
-        <EarlyWarningPanel
-          charterNumber={charterNumber}
-          period={period}
-          peerGroup={peerGroup}
-          token={token}
-          alerts={alerts}
-        />
-      </div>
+      {/* ── 2a. Elevated panels (watch / alert / urgent) — detailed cards ── */}
+      {hasElevated && (
+        <div ref={ewDetailRef} className="cq-alerts-area">
+          <EarlyWarningPanel
+            charterNumber={charterNumber}
+            period={period}
+            peerGroup={peerGroup}
+            token={token}
+            alerts={alerts}
+            ewData={ewData}
+            managed
+            visibleLevels={['watch', 'alert', 'urgent']}
+          />
+        </div>
+      )}
+
+      {/* ── 2b. Quiet status line for normal panels — small text, no panels ── */}
+      <QuietStatusLine ewData={ewData} />
+
+      {/* ── 3. KPI cards ── */}
+      <KpiRow metrics={KPI_DEFS} comparison={comparison} />
 
       <div className="cq-body">
 
-        {/* ── Trend chart card ── */}
+        {/* ── 4 + 5. Trend chart card with trimmed metric selector ── */}
         <div className="cq-card">
           <div className="cq-card-header">
             <span className="cq-card-title">Trend Analysis</span>
             <span className="cq-card-meta">Updates with: peer group · time period</span>
           </div>
 
-          {/* Metric tabs — click a tab to switch the chart below */}
-          <MetricTabs
-            activeMetric={activeMetric}
-            onSelect={setActiveMetric}
-            comparison={comparison}
-          />
+          {/* 4. Metric chip selector — 4 primary + "More metrics" dropdown */}
+          <MetricSelector activeMetric={activeMetric} onSelect={setActiveMetric} />
 
+          {/* 5. Trend chart — leave exactly as-is */}
           <div className="cq-card-body">
             <PeerBandChart
               metric={activeMetric}
