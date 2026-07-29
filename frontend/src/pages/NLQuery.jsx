@@ -6,6 +6,9 @@
  */
 
 import React, { useState, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import PeerBandChart from '../components/PeerBandChart';
 
 const API = import.meta.env.VITE_API_URL ?? '';
@@ -26,136 +29,39 @@ const EXAMPLE_QUESTIONS = [
   'What is our deposit market share in Genesee County?',
 ];
 
-// ── Simple markdown renderer ──────────────────────────────────────────────────
-// Handles: ## headers, **bold**, *italic*, tables, --- hr, - bullets, > blockquote
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+// react-markdown + remark-gfm (tables, strikethrough) + rehype-sanitize (XSS).
+// Custom components preserve the existing nl-* CSS classes.
 
-function inlineMarkdown(text) {
-  // bold+italic: ***text***
-  text = text.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  // bold: **text**
-  text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  // italic: *text*
-  text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-  // inline code: `text`
-  text = text.replace(/`([^`]+)`/g, '<code class="nl-inline-code">$1</code>');
-  return text;
-}
+const MD_COMPONENTS = {
+  h2:         ({ children })            => <h2 className="nl-h2">{children}</h2>,
+  h3:         ({ children })            => <h3 className="nl-h3">{children}</h3>,
+  ul:         ({ children })            => <ul className="nl-list">{children}</ul>,
+  blockquote: ({ children })            => <blockquote className="nl-blockquote">{children}</blockquote>,
+  hr:         ()                        => <hr className="nl-hr" />,
+  p:          ({ children })            => <p className="nl-para">{children}</p>,
+  code:       ({ className, children }) => {
+    // Fenced code blocks get a language-* className; inline code does not.
+    return /^language-/.test(className ?? '')
+      ? <code className={className}>{children}</code>
+      : <code className="nl-inline-code">{children}</code>;
+  },
+  table: ({ children }) => (
+    <div className="nl-table-wrap"><table className="nl-table">{children}</table></div>
+  ),
+};
 
 function MarkdownBlock({ source }) {
   if (!source) return null;
-  const lines  = source.split('\n');
-  const nodes  = [];
-  let i        = 0;
-  let listBuf  = [];
-
-  function flushList() {
-    if (!listBuf.length) return;
-    nodes.push(
-      <ul key={`ul-${i}`} className="nl-list">
-        {listBuf.map((item, j) => (
-          <li key={j} dangerouslySetInnerHTML={{ __html: inlineMarkdown(item) }} />
-        ))}
-      </ul>
-    );
-    listBuf = [];
-  }
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Blank line
-    if (!line.trim()) { flushList(); i++; continue; }
-
-    // Horizontal rule
-    if (/^-{3,}$/.test(line.trim())) {
-      flushList();
-      nodes.push(<hr key={`hr-${i}`} className="nl-hr" />);
-      i++; continue;
-    }
-
-    // H2
-    if (line.startsWith('## ')) {
-      flushList();
-      nodes.push(
-        <h2 key={`h2-${i}`} className="nl-h2"
-          dangerouslySetInnerHTML={{ __html: inlineMarkdown(line.slice(3)) }} />
-      );
-      i++; continue;
-    }
-
-    // H3
-    if (line.startsWith('### ')) {
-      flushList();
-      nodes.push(
-        <h3 key={`h3-${i}`} className="nl-h3"
-          dangerouslySetInnerHTML={{ __html: inlineMarkdown(line.slice(4)) }} />
-      );
-      i++; continue;
-    }
-
-    // Blockquote
-    if (line.startsWith('> ')) {
-      flushList();
-      nodes.push(
-        <blockquote key={`bq-${i}`} className="nl-blockquote"
-          dangerouslySetInnerHTML={{ __html: inlineMarkdown(line.slice(2)) }} />
-      );
-      i++; continue;
-    }
-
-    // Table: collect consecutive | lines
-    if (line.startsWith('|')) {
-      flushList();
-      const tableLines = [];
-      while (i < lines.length && lines[i].startsWith('|')) {
-        tableLines.push(lines[i]);
-        i++;
-      }
-      // Parse: first row = header, second row = separator, rest = body
-      const rows    = tableLines.filter(l => !/^\|[-: |]+\|$/.test(l.trim()));
-      const parseRow = r => r.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
-      const headers = parseRow(rows[0] || '');
-      const body    = rows.slice(1);
-      nodes.push(
-        <div key={`tbl-${i}`} className="nl-table-wrap">
-          <table className="nl-table">
-            <thead>
-              <tr>{headers.map((h, j) => (
-                <th key={j} dangerouslySetInnerHTML={{ __html: inlineMarkdown(h.trim()) }} />
-              ))}</tr>
-            </thead>
-            <tbody>
-              {body.map((row, ri) => (
-                <tr key={ri}>
-                  {parseRow(row).map((cell, ci) => (
-                    <td key={ci} dangerouslySetInnerHTML={{ __html: inlineMarkdown(cell.trim()) }} />
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-      continue;
-    }
-
-    // Bullet list item
-    if (/^[-*] /.test(line)) {
-      listBuf.push(line.slice(2).trim());
-      i++; continue;
-    }
-
-    // Regular paragraph
-    flushList();
-    nodes.push(
-      <p key={`p-${i}`} className="nl-para"
-        dangerouslySetInnerHTML={{ __html: inlineMarkdown(line) }} />
-    );
-    i++;
-  }
-
-  flushList();
-  return <>{nodes}</>;
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeSanitize]}
+      components={MD_COMPONENTS}
+    >
+      {source}
+    </ReactMarkdown>
+  );
 }
 
 // ── Metric display helpers ────────────────────────────────────────────────────
