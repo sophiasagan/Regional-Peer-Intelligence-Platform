@@ -61,6 +61,9 @@ DEFAULT_ALERT_THRESHOLDS: dict[str, float] = {
     "chargeoff_acceleration_qoq": 0.25,
 }
 
+# Minimum peer count for reliable percentile / star scoring (matches peer_engine.py regional minimum).
+MIN_PEER_N: int = 10
+
 
 def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     """Add delinquency and charge-off ratio columns to a financials DataFrame."""
@@ -109,9 +112,12 @@ def compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
 
     # NCUA stores acct_RB0172 as basis points (e.g. 1095 = 10.95%).
     # Divide by 10000 to get decimal fraction so frontend * 100 displays correctly.
-    df["rbc_ratio"] = pd.to_numeric(
-        df.get("acct_RB0172", pd.Series(dtype=float, index=df.index)), errors="coerce"
-    ) / 10000
+    # acct_RB0172 = 0 means below the RBC filing threshold, not a genuine zero — treat as NaN.
+    df["rbc_ratio"] = (
+        pd.to_numeric(
+            df.get("acct_RB0172", pd.Series(dtype=float, index=df.index)), errors="coerce"
+        ) / 10000
+    ).replace(0, np.nan)
 
     # Non-accrual rate = (non-commercial + commercial non-accrual) / total loans
     non_accrual = (
@@ -340,8 +346,11 @@ def _load_peer_growth_values(
     return growth.dropna()
 
 
-def rank_institution(value: float, distribution: dict, metric: str) -> float:
+def rank_institution(value: float, distribution: dict, metric: str) -> Optional[float]:
     """Return adjusted percentile rank (0–100), inverted for ADVERSE metrics.
+
+    Returns None when the distribution has zero variance (all peers identical) or missing
+    endpoints — callers must guard against None before rounding or star assignment.
 
     For ADVERSE metrics, a lower raw value = higher rank (better).
     For POSITIVE metrics, a higher raw value = higher rank (better).
@@ -349,7 +358,7 @@ def rank_institution(value: float, distribution: dict, metric: str) -> float:
     p10 = distribution.get("p10")
     p90 = distribution.get("p90")
     if p10 is None or p90 is None or p10 == p90:
-        return 50.0
+        return None  # zero variance or missing endpoints — percentile undefined
 
     # Linear interpolation between p10 and p90
     raw_rank = (value - p10) / (p90 - p10) * 80 + 10  # maps [p10,p90] → [10,90]
@@ -360,12 +369,15 @@ def rank_institution(value: float, distribution: dict, metric: str) -> float:
     return raw_rank
 
 
-def assign_stars(percentile_rank: float) -> int:
+def assign_stars(percentile_rank: Optional[float]) -> Optional[int]:
     """Convert percentile rank to 1–5 star rating.
 
+    Returns None when percentile_rank is None (zero variance or insufficient peers).
     1 star = bottom <10%
     5 stars = top 90%+
     """
+    if percentile_rank is None:
+        return None
     if percentile_rank < 10:
         return 1
     if percentile_rank < 30:
@@ -408,7 +420,11 @@ def credit_risk_composite(
         if pd.isna(value):
             continue
         dist = compute_peer_distribution(metric, peer_charters, period, db_url)
+        if dist["n"] < MIN_PEER_N:
+            continue
         rank = rank_institution(float(value), dist, metric)
+        if rank is None:  # zero variance
+            continue
         breakdown[metric] = {
             "value": float(value),
             "percentile_rank": round(rank, 1),

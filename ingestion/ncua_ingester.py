@@ -419,6 +419,11 @@ def validate(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # acct_RB0172 = 0 means institution is below the RBC filing threshold, not a genuine zero.
+    # Normalize to NaN here so it is stored as NULL and excluded from peer scoring.
+    if "acct_RB0172" in df.columns:
+        df["acct_RB0172"] = df["acct_RB0172"].replace(0, np.nan)
+
     return df.reset_index(drop=True)
 
 

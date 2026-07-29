@@ -325,7 +325,15 @@ export default function PeerComparisonTable({
                   <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
                   <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
                   <td className="numeric-col">
-                    {m.percentile_rank != null ? `${Math.round(m.percentile_rank)}th` : '—'}
+                    {m.percentile_rank != null
+                      ? `${Math.round(m.percentile_rank)}th`
+                      : m.data_quality === 'insufficient_peer_data'
+                        ? <span className="muted" title="Too few peer institutions for reliable scoring">
+                            {`— (n=${m.peer_n ?? '?'})`}
+                          </span>
+                        : m.data_quality === 'zero_variance'
+                          ? <span className="muted" title="All peers report identical values — percentile undefined">—</span>
+                          : '—'}
                   </td>
                   <td><Stars count={m.stars} /></td>
                 </tr>

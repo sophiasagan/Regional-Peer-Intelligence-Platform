@@ -27,6 +27,7 @@ from db import get_engine, institutions_quarterly
 from processing.delinquency_engine import (
     ADVERSE_METRICS,
     GROWTH_METRICS,
+    MIN_PEER_N,
     assign_stars,
     compute_growth,
     compute_peer_distribution,
@@ -110,6 +111,8 @@ class MetricRow(BaseModel):
     stars: Optional[int]
     is_adverse: bool
     unit: str
+    peer_n: Optional[int] = None
+    data_quality: Optional[str] = None  # "insufficient_peer_data" | "zero_variance"
 
 
 class PeerComparisonResponse(BaseModel):
@@ -357,35 +360,49 @@ async def get_peer_comparison(
     metric_rows = []
     for metric, (metric_label, unit) in METRIC_LABELS.items():
         inst_val = inst_row.get(metric)
-        dist = compute_peer_distribution(metric, peer_charters, period, DB_URL, prior_period=prior_period)
+        dist     = compute_peer_distribution(metric, peer_charters, period, DB_URL, prior_period=prior_period)
+        n        = dist["n"]
 
-        if dist["n"] == 0 or inst_val is None or __import__("math").isnan(float(inst_val if inst_val is not None else float("nan"))):
-            metric_rows.append(MetricRow(
-                metric_name=metric,
-                metric_label=metric_label,
-                institution_value=None,
-                peer_median=dist.get("p50"),
-                peer_p10=dist.get("p10"),
-                peer_p90=dist.get("p90"),
-                percentile_rank=None,
-                stars=None,
-                is_adverse=metric in ADVERSE_METRICS,
-                unit=unit,
-            ))
-            continue
+        # Resolve institution value to a clean float (None if missing / NaN)
+        inst_float: Optional[float] = None
+        if inst_val is not None:
+            try:
+                v = float(inst_val)
+                if not math.isnan(v):
+                    inst_float = v
+            except (TypeError, ValueError):
+                pass
 
-        pct_rank = rank_institution(float(inst_val), dist, metric)
-        metric_rows.append(MetricRow(
+        base = dict(
             metric_name=metric,
             metric_label=metric_label,
-            institution_value=float(inst_val),
+            institution_value=inst_float,
             peer_median=dist.get("p50"),
             peer_p10=dist.get("p10"),
             peer_p90=dist.get("p90"),
-            percentile_rank=round(pct_rank, 1),
-            stars=assign_stars(pct_rank),
             is_adverse=metric in ADVERSE_METRICS,
             unit=unit,
+            peer_n=n if n > 0 else None,
+        )
+
+        if n == 0 or inst_float is None:
+            metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None))
+            continue
+
+        if n < MIN_PEER_N:
+            metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None,
+                                          data_quality="insufficient_peer_data"))
+            continue
+
+        pct_rank = rank_institution(inst_float, dist, metric)
+        if pct_rank is None:  # zero variance across peer group
+            metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None,
+                                          data_quality="zero_variance"))
+            continue
+
+        metric_rows.append(MetricRow(**base,
+            percentile_rank=round(pct_rank, 1),
+            stars=assign_stars(pct_rank),
         ))
 
     return PeerComparisonResponse(
