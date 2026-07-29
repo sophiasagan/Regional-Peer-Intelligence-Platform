@@ -156,9 +156,9 @@ function StatsRow({ signal, metric }) {
       <div className="stat-divider" aria-hidden>›</div>
       <div className="signal-stat-cell">
         <span className="stat-label">
-          {regionalLabel}
+          {regionalLabel}{', any asset size'}
           {peerCount != null && (
-            <span className="stat-peer-count"> ({peerCount} peers)</span>
+            <span className="stat-peer-count"> ({peerCount})</span>
           )}
         </span>
         <span className="stat-value stat-regional">
@@ -167,7 +167,7 @@ function StatsRow({ signal, metric }) {
       </div>
       <div className="stat-divider" aria-hidden>›</div>
       <div className="signal-stat-cell">
-        <span className="stat-label">National peers</span>
+        <span className="stat-label">National peer median</span>
         <span className="stat-value stat-national">
           {fmtSignalValue(signal.national_median, metric)}
         </span>

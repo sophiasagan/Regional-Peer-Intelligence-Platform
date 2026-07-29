@@ -167,7 +167,7 @@ function InstDot({ cx, cy, payload, annotations }) {
 }
 
 // Percentile bar displayed below chart.
-function PercentileBar({ adjustedRank, peerCount, isAdverse, metricLabel, peerDetails }) {
+function PercentileBar({ adjustedRank, peerCount, isAdverse, metricLabel, peerDetails, peerGroupLabel }) {
   const [showPeers, setShowPeers] = React.useState(false);
   if (adjustedRank == null) return null;
   const pct  = adjustedRank.toFixed(0);
@@ -189,6 +189,9 @@ function PercentileBar({ adjustedRank, peerCount, isAdverse, metricLabel, peerDe
           </button>
         ) : (
           <span>{peerCount} peer institutions</span>
+        )}
+        {peerGroupLabel && (
+          <span className="muted"> ({peerGroupLabel})</span>
         )}
         {isAdverse && (
           <span className="polarity-note"> — lower {metricLabel} = better</span>
@@ -564,6 +567,7 @@ export default function PeerBandChart({
         isAdverse={isAdverse}
         metricLabel={metricLabel}
         peerDetails={peerDetails}
+        peerGroupLabel={peerGroupLabel}
       />
 
       {/* ── Annotation summary (crossovers, decile entries) ── */}

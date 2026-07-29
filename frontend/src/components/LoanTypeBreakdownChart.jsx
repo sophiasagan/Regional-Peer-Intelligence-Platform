@@ -162,10 +162,23 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
 
       {!loading && delinqData.length > 0 && hasDelinq && (
         <>
+          {/* ── Legend: describes actual bar encoding (red/green = above/below peer) ── */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, fontSize: 12, marginBottom: 8 }}>
+            {[
+              { color: '#E53935', label: 'Above peer median (higher delinquency)' },
+              { color: '#43A047', label: 'At or below peer median' },
+              { color: '#90A4AE', label: `${peerLabel} (peer median)` },
+            ].map(({ color, label }) => (
+              <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ display: 'inline-block', width: 12, height: 12, background: color, borderRadius: 2, flexShrink: 0 }} />
+                {label}
+              </span>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart
               data={delinqData}
-              margin={{ top: 24, right: 24, left: 8, bottom: 64 }}
+              margin={{ top: 8, right: 24, left: 8, bottom: 64 }}
               barCategoryGap="30%"
               barGap={4}
             >
@@ -187,12 +200,6 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
                 domain={[0, dataMax => Math.max(dataMax * 1.3, 0.1)]}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                verticalAlign="top"
-                height={32}
-                iconType="square"
-                wrapperStyle={{ fontSize: 12 }}
-              />
 
               <Bar dataKey="inst_pct" name="Your institution" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
                 {delinqData.map((entry, i) => (
