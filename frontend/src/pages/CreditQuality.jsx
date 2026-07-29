@@ -21,6 +21,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import EarlyWarningPanel      from '../components/EarlyWarningPanel';
 import PeerBandChart          from '../components/PeerBandChart';
 import SignalSeparator        from '../components/SignalSeparator';
@@ -362,26 +363,92 @@ function KpiRow({ metrics, comparison }) {
 
 // ── Section 4 — Metric chip selector ──────────────────────────────────────
 
-function MetricSelector({ activeMetric, onSelect }) {
+// Renders the "More metrics" button + its dropdown via createPortal so the menu
+// escapes both overflow-x:auto on .metric-tabs and overflow:hidden on .cq-card.
+function MoreMetricsDropdown({ activeMetric, onSelect }) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef(null);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    function handleOutside(e) {
-      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
-    }
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [moreOpen]);
+  const [menuPos,  setMenuPos]  = useState({ top: 0, left: 0 });
+  const btnRef  = useRef(null);
+  const menuRef = useRef(null);
 
   const activeMoreLabel = MORE_VALUES.has(activeMetric)
     ? MORE_TABS.find(t => !t.divider && t.value === activeMetric)?.label
     : null;
 
+  function handleToggle() {
+    if (moreOpen) {
+      setMoreOpen(false);
+    } else {
+      if (btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        setMenuPos({ top: rect.bottom + 4, left: rect.left });
+      }
+      setMoreOpen(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function handleOutside(e) {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target) &&
+        btnRef.current  && !btnRef.current.contains(e.target)
+      ) {
+        setMoreOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [moreOpen]);
+
+  const menu = moreOpen && createPortal(
+    <div
+      ref={menuRef}
+      className="more-metrics-menu"
+      role="listbox"
+      style={{ position: 'fixed', top: menuPos.top, left: menuPos.left }}
+    >
+      {MORE_TABS.map((tab, i) => {
+        if (tab.divider) {
+          return <div key={`div-${i}`} className="more-metrics-divider">{tab.label}</div>;
+        }
+        return (
+          <button
+            key={tab.value}
+            role="option"
+            aria-selected={activeMetric === tab.value}
+            className={`more-metrics-item${activeMetric === tab.value ? ' active' : ''}`}
+            onClick={() => { onSelect(tab.value); setMoreOpen(false); }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`metric-tab more-metrics-btn${activeMoreLabel ? ' active' : ''}`}
+        onClick={handleToggle}
+        aria-haspopup="listbox"
+        aria-expanded={moreOpen}
+      >
+        {activeMoreLabel ?? 'More metrics'}
+        <span className="more-metrics-chevron" aria-hidden>{moreOpen ? ' ▲' : ' ▼'}</span>
+      </button>
+      {menu}
+    </>
+  );
+}
+
+function MetricSelector({ activeMetric, onSelect }) {
   return (
     <div className="metric-tabs" role="tablist" aria-label="Select metric">
-      {/* Primary chips — 4 KPI metrics, no stars */}
       {KPI_DEFS.map(def => (
         <button
           key={def.metric}
@@ -393,45 +460,7 @@ function MetricSelector({ activeMetric, onSelect }) {
           {def.label}
         </button>
       ))}
-
-      {/* More metrics dropdown */}
-      <div className="more-metrics-wrap" ref={moreRef}>
-        <button
-          type="button"
-          className={`metric-tab more-metrics-btn${activeMoreLabel ? ' active' : ''}`}
-          onClick={() => setMoreOpen(o => !o)}
-          aria-haspopup="listbox"
-          aria-expanded={moreOpen}
-        >
-          {activeMoreLabel ?? 'More metrics'}
-          <span className="more-metrics-chevron" aria-hidden>{moreOpen ? ' ▲' : ' ▼'}</span>
-        </button>
-
-        {moreOpen && (
-          <div className="more-metrics-menu" role="listbox">
-            {MORE_TABS.map((tab, i) => {
-              if (tab.divider) {
-                return (
-                  <div key={`div-${i}`} className="more-metrics-divider">
-                    {tab.label}
-                  </div>
-                );
-              }
-              return (
-                <button
-                  key={tab.value}
-                  role="option"
-                  aria-selected={activeMetric === tab.value}
-                  className={`more-metrics-item${activeMetric === tab.value ? ' active' : ''}`}
-                  onClick={() => { onSelect(tab.value); setMoreOpen(false); }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <MoreMetricsDropdown activeMetric={activeMetric} onSelect={onSelect} />
     </div>
   );
 }

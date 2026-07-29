@@ -100,6 +100,21 @@ METRIC_LABELS: dict[str, tuple[str, str]] = {
 DISPLAY_METRICS = list(METRIC_LABELS.keys())
 
 
+def _ordinal(rank: int, n_total: int) -> str:
+    """Format 1-indexed rank as '1st of 4 (best)', '3rd of 4', '4th of 4 (worst)'."""
+    rem100 = rank % 100
+    if 11 <= rem100 <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(rank % 10, "th")
+    label = f"{rank}{suffix} of {n_total}"
+    if rank == 1:
+        label += " (best)"
+    elif rank == n_total:
+        label += " (worst)"
+    return label
+
+
 class MetricRow(BaseModel):
     metric_name: str
     metric_label: str
@@ -112,7 +127,9 @@ class MetricRow(BaseModel):
     is_adverse: bool
     unit: str
     peer_n: Optional[int] = None
-    data_quality: Optional[str] = None  # "insufficient_peer_data" | "zero_variance"
+    data_quality: Optional[str] = None  # "insufficient_peer_data" | "zero_variance" | "custom_rank"
+    rank_ordinal: Optional[str] = None  # e.g. "2nd of 4 (best)" — set for CUSTOM small groups
+    rank_pos: Optional[int] = None      # numeric rank position (1 = best) — used for row color
 
 
 class PeerComparisonResponse(BaseModel):
@@ -348,6 +365,7 @@ async def get_peer_comparison(
     institution_name = str(inst_row.get("institution_name", f"Charter {charter_number}"))
 
     # Build peer group — custom_charters overrides peer_group when provided
+    is_custom = bool(custom_charters)
     if custom_charters:
         peer_charters = [int(c.strip()) for c in custom_charters.split(",") if c.strip().isdigit()]
         label = f"Custom selection ({len(peer_charters)} institutions)"
@@ -355,6 +373,22 @@ async def get_peer_comparison(
         group_type = PeerGroupType(peer_group)
         peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, custom_group_name, DB_URL)
         label = peer_group_label(group_type, charter_number, period, DB_URL)
+
+    # Pre-fetch peer institution rows for small CUSTOM groups.
+    # These are used to compute exact ordinal ranks instead of suppressing with "— (n=4)".
+    # Only executed when custom_charters is set and the group is below the MIN_PEER_N threshold.
+    peer_df_for_rank: Optional[pd.DataFrame] = None
+    if is_custom and 0 < len(peer_charters) < MIN_PEER_N:
+        with engine.connect() as conn:
+            peer_result = conn.execute(
+                select(institutions_quarterly).where(
+                    institutions_quarterly.c.charter_number.in_(peer_charters),
+                    institutions_quarterly.c.period == period,
+                )
+            )
+            peer_rows_raw = [dict(r) for r in peer_result.mappings().all()]
+        if peer_rows_raw:
+            peer_df_for_rank = compute_ratios(pd.DataFrame(peer_rows_raw))
 
     # Build metric rows
     metric_rows = []
@@ -389,6 +423,48 @@ async def get_peer_comparison(
             metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None))
             continue
 
+        # CUSTOM peer group with small n: compute ordinal rank instead of suppressing.
+        if is_custom and n < MIN_PEER_N:
+            peer_vals: list[float] = []
+            if peer_df_for_rank is not None and metric in peer_df_for_rank.columns:
+                peer_vals = [
+                    float(v) for v in peer_df_for_rank[metric].tolist()
+                    if v is not None and not pd.isna(v)
+                ]
+
+            if not peer_vals:
+                metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None,
+                                              data_quality="insufficient_peer_data"))
+                continue
+
+            # Zero variance check across peers + institution
+            all_unique = {round(v, 10) for v in peer_vals} | {round(inst_float, 10)}
+            if len(all_unique) == 1:
+                metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None,
+                                              data_quality="zero_variance",
+                                              rank_ordinal="tied (all equal)"))
+                continue
+
+            # Count peers strictly better than the institution to determine 1-based rank
+            TOL = 1e-10
+            if metric in ADVERSE_METRICS:
+                better_count = sum(1 for v in peer_vals if v < inst_float - TOL)
+            else:
+                better_count = sum(1 for v in peer_vals if v > inst_float + TOL)
+            rank_pos = better_count + 1
+            n_total  = len(peer_vals) + 1  # peers with data + institution
+
+            pct = 100.0 * (n_total - rank_pos) / max(n_total - 1, 1)
+            metric_rows.append(MetricRow(**{**base, "peer_n": len(peer_vals)},
+                percentile_rank=None,
+                stars=assign_stars(pct),
+                data_quality="custom_rank",
+                rank_ordinal=_ordinal(rank_pos, n_total),
+                rank_pos=rank_pos,
+            ))
+            continue
+
+        # Non-custom (or custom >= MIN_PEER_N): standard percentile path
         if n < MIN_PEER_N:
             metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None,
                                           data_quality="insufficient_peer_data"))

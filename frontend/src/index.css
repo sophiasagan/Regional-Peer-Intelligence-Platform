@@ -1046,9 +1046,9 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .cq-quiet-status {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   padding: 7px 28px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .cq-quiet-item {
@@ -1061,8 +1061,9 @@ details[open] .nl-data-summary::before { content: '▼ '; }
   font-size: 11px;
 }
 .cq-quiet-sep {
-  color: var(--border);
+  color: var(--text-muted);
   font-size: 14px;
+  padding: 0 4px;
 }
 
 /* ── 3. KPI card peer-median tooltip ─────────────────────────────────────────
@@ -1111,13 +1112,9 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .kpi-info-wrap:hover .kpi-tooltip { display: block; }
 
 /* ── 4. "More metrics" dropdown ──────────────────────────────────────────────
-   Positioned relative to the trigger button; closes on outside click (JS). */
-.more-metrics-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
+   Rendered via React createPortal at document.body.
+   Position (top/left) set by JS using getBoundingClientRect on the trigger button.
+   z-index 9999 ensures it floats over cards, header, and the overflow:hidden card. */
 .more-metrics-btn {
   /* inherits .metric-tab — just adds chevron spacing */
 }
@@ -1126,10 +1123,8 @@ details[open] .nl-data-summary::before { content: '▼ '; }
   opacity: .7;
 }
 .more-metrics-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 200;
+  /* position: fixed + top/left set inline by the portal */
+  z-index: 9999;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;

@@ -301,7 +301,9 @@ export default function PeerComparisonTable({
               <th className="numeric-col">Peer Median</th>
               <th className="numeric-col">Top Decile</th>
               <th className="numeric-col">Bottom Decile</th>
-              <th className="numeric-col">Percentile</th>
+              <th className="numeric-col">
+                {metrics.some(m => m.data_quality === 'custom_rank') ? 'Rank' : 'Percentile'}
+              </th>
               <th>Stars</th>
             </tr>
           </thead>
@@ -309,10 +311,16 @@ export default function PeerComparisonTable({
             {metrics.map(m => {
               const isTop    = m.percentile_rank != null && m.percentile_rank >= 90;
               const isBottom = m.percentile_rank != null && m.percentile_rank < 10;
+              // Custom rank coloring: rank_pos===1 → best, rank_pos===n_total → worst
+              const nTotal   = m.peer_n != null ? m.peer_n + 1 : null;
+              const isCustomTop    = m.data_quality === 'custom_rank' && m.rank_pos === 1;
+              const isCustomBottom = m.data_quality === 'custom_rank' && nTotal != null && m.rank_pos === nTotal;
+              const rowTop    = isTop    || isCustomTop;
+              const rowBottom = isBottom || isCustomBottom;
               return (
                 <tr
                   key={m.metric_name}
-                  className={`metric-row${isTop ? ' row-top-decile' : isBottom ? ' row-bottom-decile' : ''}`}
+                  className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}
                 >
                   <td className="metric-name-cell">
                     <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
@@ -327,13 +335,19 @@ export default function PeerComparisonTable({
                   <td className="numeric-col">
                     {m.percentile_rank != null
                       ? `${Math.round(m.percentile_rank)}th`
-                      : m.data_quality === 'insufficient_peer_data'
-                        ? <span className="muted" title="Too few peer institutions for reliable scoring">
-                            {`— (n=${m.peer_n ?? '?'})`}
+                      : m.data_quality === 'custom_rank'
+                        ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
+                            {m.rank_ordinal ?? '—'}
                           </span>
-                        : m.data_quality === 'zero_variance'
-                          ? <span className="muted" title="All peers report identical values — percentile undefined">—</span>
-                          : '—'}
+                        : m.data_quality === 'insufficient_peer_data'
+                          ? <span className="muted" title="Too few peer institutions for reliable scoring">
+                              {`— (n=${m.peer_n ?? '?'})`}
+                            </span>
+                          : m.data_quality === 'zero_variance'
+                            ? <span className="muted" title="All peers report identical values — percentile undefined">
+                                {m.rank_ordinal ?? 'tied (all equal)'}
+                              </span>
+                            : '—'}
                   </td>
                   <td><Stars count={m.stars} /></td>
                 </tr>
