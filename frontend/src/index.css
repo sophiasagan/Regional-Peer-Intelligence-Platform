@@ -358,7 +358,6 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 
 /* ── Page body ── */
 .cq-body         { padding: 20px 28px 64px; display: flex; flex-direction: column; gap: 24px; }
-.cq-alerts-area  { padding: 0 28px; }
 
 /* ── Section cards ── */
 .cq-card {
@@ -494,7 +493,49 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 
 /* ═══ Early Warning Panel ════════════════════════════════════════════════════ */
 
-.cq-alerts-area         { padding: 0 28px; }
+/* Alert area: flex column so collapsed rows + cards stack with consistent gap. */
+.cq-alerts-area {
+  padding: 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 8px breathing room between the urgent banner above and the alerts area. */
+.cq-urgent-banner + .cq-alerts-area { margin-top: 8px; }
+
+/* ── Slim collapsed row for urgent EW cards ──────────────────────────────────
+   Lightweight single-line treatment — not a full card. The Urgent badge
+   carries the severity signal; the row itself is intentionally quiet. */
+.ew-collapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  background: #FFF5F5;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  appearance: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ew-collapsed-row:hover {
+  background: #FEF2F2;
+  border-color: #FCA5A5;
+}
+.ew-collapsed-row-label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ew-collapsed-row-chevron {
+  color: var(--color-red);
+  flex-shrink: 0;
+  display: block;
+}
 
 .ew-panel               { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
 .ew-panel--active       { border-color: #FCA5A5; }

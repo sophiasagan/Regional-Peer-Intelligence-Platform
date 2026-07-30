@@ -252,25 +252,35 @@ const EW_TYPE_LABELS = {
 
 function EwCollapsedRow({ type, onExpand }) {
   return (
-    <div className="ew-panel ew-panel--active">
-      <button
-        type="button"
-        className="ew-panel-toggle"
-        onClick={onExpand}
-        aria-expanded={false}
-        aria-label={`Show ${EW_TYPE_LABELS[type] ?? type} detail`}
+    <button
+      type="button"
+      className="ew-collapsed-row"
+      onClick={onExpand}
+      aria-expanded={false}
+      aria-label={`Show ${EW_TYPE_LABELS[type] ?? type} detail`}
+    >
+      <span className="ew-collapsed-row-label">{EW_TYPE_LABELS[type] ?? type}</span>
+      <span
+        className="ew-level-badge"
+        style={{ color: '#D32F2F', backgroundColor: '#FEF2F2', border: '1px solid #EF4444' }}
       >
-        <span className="ew-panel-icon" aria-hidden>⚠</span>
-        <span className="ew-panel-heading">{EW_TYPE_LABELS[type] ?? type}</span>
-        <span
-          className="ew-level-badge"
-          style={{ color: '#D32F2F', backgroundColor: '#FEF2F2', border: '1px solid #EF4444' }}
-        >
-          Urgent
-        </span>
-        <span className="ew-panel-chevron" aria-hidden>▼</span>
-      </button>
-    </div>
+        Urgent
+      </span>
+      {/* Inline SVG chevron — Tabler-style, no package dependency needed */}
+      <svg
+        className="ew-collapsed-row-chevron"
+        width="14" height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </button>
   );
 }
 
