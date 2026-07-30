@@ -163,7 +163,7 @@ function InstDot({ cx, cy, payload, annotations }) {
     const d = `M${cx},${cy - 6} L${cx + 5},${cy} L${cx},${cy + 6} L${cx - 5},${cy} Z`;
     return <path d={d} fill={C.institution} stroke="white" strokeWidth={1} />;
   }
-  return <circle cx={cx} cy={cy} r={3} fill={C.institution} stroke="white" strokeWidth={1} />;
+  return <circle cx={cx} cy={cy} r={5} fill="#fff" stroke={C.institution} strokeWidth={2} />;
 }
 
 // Percentile bar displayed below chart.
@@ -509,7 +509,7 @@ export default function PeerBandChart({
 
           {/* IQR band (p25–p75): stacked Area — base is transparent, height is gray */}
           <Area
-            type="monotone"
+            type="linear"
             dataKey="iqr_base"
             stackId="iqr"
             stroke="none"
@@ -520,7 +520,7 @@ export default function PeerBandChart({
             isAnimationActive={false}
           />
           <Area
-            type="monotone"
+            type="linear"
             dataKey="iqr_height"
             stackId="iqr"
             stroke="none"
@@ -532,53 +532,52 @@ export default function PeerBandChart({
 
           {/* Top decile line — teal */}
           <Line
-            type="monotone"
             dataKey="topDecileLine"
             stroke={C.topDecile}
             strokeWidth={1}
-            dot={false}
+            dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.topDecile }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.topDecile }}
             name="Top decile"
             legendType="line"
           />
 
           {/* Bottom decile line — coral */}
           <Line
-            type="monotone"
             dataKey="bottomDecileLine"
             stroke={C.bottomDecile}
             strokeWidth={1}
-            dot={false}
+            dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.bottomDecile }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.bottomDecile }}
             name="Bottom decile"
             legendType="line"
           />
 
           {/* Peer median — dashed gray */}
           <Line
-            type="monotone"
             dataKey="p50"
             stroke={C.peerMedian}
             strokeWidth={1}
             strokeDasharray="4 4"
-            dot={false}
+            dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.peerMedian }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.peerMedian }}
             name="Peer median"
           />
 
           {/* Regional peer median — P76 EXCLUSIVE — purple dashed */}
           {showRegional && (
             <Line
-              type="monotone"
               dataKey="regional"
               stroke={C.regional}
               strokeWidth={1.5}
               strokeDasharray="6 3"
-              dot={false}
+              dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.regional }}
+              activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.regional }}
               name="Regional peers"
             />
           )}
 
           {/* Institution — bold primary, annotated dots */}
           <Line
-            type="monotone"
             dataKey="institution"
             stroke={C.institution}
             strokeWidth={2.5}
@@ -586,7 +585,7 @@ export default function PeerBandChart({
             dot={(props) => (
               <InstDot key={props.index} {...props} annotations={annotations} />
             )}
-            activeDot={{ r: 5, fill: C.institution }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.institution }}
             isAnimationActive={false}
           />
 
