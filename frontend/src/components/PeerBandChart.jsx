@@ -244,23 +244,49 @@ function AnnotationSummary({ annotations, isAdverse }) {
   );
 }
 
-const CustomTooltip = ({ active, payload, label, unit, isAdverse }) => {
+const TOOLTIP_SKIP  = new Set(['iqr_base', 'iqr_height']);
+const TOOLTIP_ORDER = ['institution', 'regional', 'p50', 'topDecileLine', 'bottomDecileLine'];
+
+const CustomTooltip = ({ active, payload, label, unit }) => {
   if (!active || !payload?.length) return null;
-  const order = ['institution', 'regional', 'p50', 'topDecileLine', 'bottomDecileLine'];
-  const sorted = [...payload].sort(
-    (a, b) => order.indexOf(a.dataKey) - order.indexOf(b.dataKey)
-  );
+  const rows = [...payload]
+    .filter(p => !TOOLTIP_SKIP.has(p.dataKey) && p.value != null)
+    .sort((a, b) => TOOLTIP_ORDER.indexOf(a.dataKey) - TOOLTIP_ORDER.indexOf(b.dataKey));
+  if (!rows.length) return null;
   return (
     <div className="chart-tooltip">
-      <p className="tooltip-period">{label}</p>
-      {sorted.map(p => p.value != null && (
-        <p key={p.dataKey} style={{ color: p.stroke || p.color }}>
-          {p.name}: {fmt(p.value, unit)}
-        </p>
+      <div className="tooltip-period">{label}</div>
+      {rows.map(p => (
+        <div key={p.dataKey} className="tooltip-row">
+          <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="4" cy="4" r="4" fill={p.stroke ?? p.color ?? '#999'} />
+          </svg>
+          <span className="tooltip-name">{p.name}</span>
+          <span className="tooltip-value">{fmt(p.value, unit)}</span>
+        </div>
       ))}
     </div>
   );
 };
+
+function renderLegend({ payload }) {
+  if (!payload?.length) return null;
+  return (
+    <div className="chart-legend">
+      {payload
+        .filter(p => p.type !== 'none')
+        .map(p => (
+          <span key={p.dataKey ?? p.value} className="chart-legend-item">
+            <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+              <circle cx="4" cy="4" r="4" fill={p.color} />
+            </svg>
+            {p.value}
+          </span>
+        ))
+      }
+    </div>
+  );
+}
 
 function exportCsv(data, metric, charterNumber, period, metricLabel, peerGroupLabel) {
   if (!data?.length) return;
@@ -398,6 +424,22 @@ export default function PeerBandChart({
       )
     : null;
 
+  // Delta vs prior period — shown as small badge under chart title
+  const allInstPoints = plotData.filter(d => d.institution != null);
+  const prevPoint     = allInstPoints.length >= 2 ? allInstPoints[allInstPoints.length - 2] : null;
+  const deltaRaw      = (lastPoint?.institution != null && prevPoint?.institution != null)
+    ? lastPoint.institution - prevPoint.institution : null;
+  let deltaBadge = null;
+  if (deltaRaw != null && (unit === '%' || unit === 'x')) {
+    const sign   = deltaRaw >= 0 ? '+' : '';
+    const isGood = isAdverse ? deltaRaw <= 0 : deltaRaw >= 0;
+    const suffix = unit === '%' ? 'pp' : 'x';
+    const mag    = unit === '%'
+      ? `${sign}${(deltaRaw * 100).toFixed(2)}${suffix}`
+      : `${sign}${deltaRaw.toFixed(3)}${suffix}`;
+    deltaBadge = { label: (deltaRaw >= 0 ? '▲ ' : '▼ ') + mag, good: isGood };
+  }
+
   const metricLabel  = meta?.metric_label  ?? metric;
   const peerGroupLabel = meta?.peer_group_label ?? peerGroup;
   const showRegional   = peerGroup !== 'REGIONAL' && regionalApiData?.length > 0;
@@ -414,7 +456,14 @@ export default function PeerBandChart({
       <div className="chart-header">
         <div className="chart-header-left">
           <h2 className="chart-metric-title">{metricLabel}</h2>
-          <span className="chart-period-label">{nPeriods / 4}Y / {nPeriods}Q</span>
+          <div className="chart-period-label">
+            {nPeriods / 4}Y / {nPeriods}Q
+            {deltaBadge && (
+              <span className="chart-delta-badge" style={{ color: deltaBadge.good ? C.topDecile : C.bottomDecile }}>
+                {deltaBadge.label}
+              </span>
+            )}
+          </div>
         </div>
         <div className="chart-header-right">
           {onPeerGroupChange ? (
@@ -441,7 +490,7 @@ export default function PeerBandChart({
       {/* ── Chart ── */}
       <ResponsiveContainer width="100%" height={420}>
         <ComposedChart data={plotData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+          <CartesianGrid stroke="#EEEEEE" strokeWidth={1} vertical={false} />
           <XAxis dataKey="period" tick={{ fontSize: 12 }} />
           <YAxis
             tick={{ fontSize: 12 }}
@@ -453,10 +502,9 @@ export default function PeerBandChart({
             content={<CustomTooltip unit={unit} isAdverse={isAdverse} />}
           />
           <Legend
+            content={renderLegend}
             verticalAlign="top"
-            height={36}
-            iconType="line"
-            wrapperStyle={{ fontSize: 12 }}
+            height={28}
           />
 
           {/* IQR band (p25–p75): stacked Area — base is transparent, height is gray */}
