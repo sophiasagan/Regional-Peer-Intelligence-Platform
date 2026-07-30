@@ -572,7 +572,7 @@ export default function PeerBandChart({
               strokeDasharray="6 3"
               dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.regional }}
               activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.regional }}
-              name="Regional peers"
+              name="Regional peers (ref.)"
             />
           )}
 
