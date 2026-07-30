@@ -34,6 +34,7 @@ from processing.delinquency_engine import (
     compute_ratios,
     rank_institution,
     _prior_year_period,
+    _load_peer_growth_values,
 )
 from processing.early_warning_engine import _trailing_periods
 from processing.peer_engine import PeerGroupType, build_peer_group, peer_group_label
@@ -427,10 +428,19 @@ async def get_peer_comparison(
         if is_custom and n < MIN_PEER_N:
             peer_vals: list[float] = []
             if peer_df_for_rank is not None and metric in peer_df_for_rank.columns:
+                # Standard ratio / raw account code — already computed by compute_ratios().
                 peer_vals = [
                     float(v) for v in peer_df_for_rank[metric].tolist()
                     if v is not None and not pd.isna(v)
                 ]
+            elif metric in GROWTH_METRICS and prior_period:
+                # Growth metrics are NOT present in peer_df_for_rank because compute_ratios()
+                # does not add them — they require a prior-year query.  Reuse the same
+                # _load_peer_growth_values() that compute_peer_distribution() calls internally.
+                growth_series = _load_peer_growth_values(
+                    metric, peer_charters, period, prior_period, DB_URL
+                )
+                peer_vals = [float(v) for v in growth_series.tolist() if not pd.isna(v)]
 
             if not peer_vals:
                 metric_rows.append(MetricRow(**base, percentile_rank=None, stars=None,
