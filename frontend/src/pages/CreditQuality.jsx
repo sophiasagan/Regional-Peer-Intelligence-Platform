@@ -206,7 +206,7 @@ function buildUrgentText(type, card) {
   return `${card.metric_label} — currently ${val}`;
 }
 
-function UrgentBanner({ ewData, onReviewDetail }) {
+function UrgentBanner({ ewData, expanded, onReviewDetail }) {
   if (!ewData) return null;
   const urgentCards = [
     ewData.acceleration && { type: 'acceleration', ...ewData.acceleration },
@@ -232,8 +232,43 @@ function UrgentBanner({ ewData, onReviewDetail }) {
         type="button"
         className="btn btn--danger cq-urgent-action"
         onClick={onReviewDetail}
+        aria-expanded={expanded}
       >
-        Review detail ↓
+        Review detail {expanded ? '↑' : '↓'}
+      </button>
+    </div>
+  );
+}
+
+// ── Slim collapsed row for a single urgent EW card ─────────────────────────
+// Reuses existing .ew-panel / .ew-panel-toggle / .ew-level-badge classes —
+// no new CSS required.
+
+const EW_TYPE_LABELS = {
+  acceleration: 'Trend Acceleration',
+  divergence:   'Peer Divergence',
+  projection:   'Threshold Projection',
+};
+
+function EwCollapsedRow({ type, onExpand }) {
+  return (
+    <div className="ew-panel ew-panel--active">
+      <button
+        type="button"
+        className="ew-panel-toggle"
+        onClick={onExpand}
+        aria-expanded={false}
+        aria-label={`Show ${EW_TYPE_LABELS[type] ?? type} detail`}
+      >
+        <span className="ew-panel-icon" aria-hidden>⚠</span>
+        <span className="ew-panel-heading">{EW_TYPE_LABELS[type] ?? type}</span>
+        <span
+          className="ew-level-badge"
+          style={{ color: '#D32F2F', backgroundColor: '#FEF2F2', border: '1px solid #EF4444' }}
+        >
+          Urgent
+        </span>
+        <span className="ew-panel-chevron" aria-hidden>▼</span>
       </button>
     </div>
   );
@@ -490,10 +525,23 @@ export default function CreditQuality({ charterNumber, token }) {
   const alerts     = useAlerts(charterNumber, period, peerGroup, token);
   const ewData     = useEarlyWarning(charterNumber, period, peerGroup, token);
 
+  // Collapse urgent cards by default — they're already summarised in the banner.
+  // Reset whenever ewData changes (period / peer group switch).
+  const [ewDetailExpanded, setEwDetailExpanded] = useState(false);
+  useEffect(() => { setEwDetailExpanded(false); }, [ewData]);
+
   // True when at least one EW panel is above "none" — drives whether the detailed panel renders
   const hasElevated = ewData != null && [
     ewData.acceleration, ewData.divergence, ewData.projection,
   ].some(c => c && c.alert_level !== 'none');
+
+  // Types whose alert_level is 'urgent' — these are the ones summarised in the banner
+  const urgentTypes = ewData
+    ? ['acceleration', 'divergence', 'projection'].filter(
+        type => ewData[type]?.alert_level === 'urgent'
+      )
+    : [];
+  const hasUrgent = urgentTypes.length > 0;
 
   useEffect(() => {
     if (instInfo?.state_abbrev && !geographyId) {
@@ -552,22 +600,67 @@ export default function CreditQuality({ charterNumber, token }) {
       {/* ── 1. Urgent alert banner — conditional, full width ── */}
       <UrgentBanner
         ewData={ewData}
-        onReviewDetail={() => ewDetailRef.current?.scrollIntoView({ behavior: 'smooth' })}
+        expanded={ewDetailExpanded}
+        onReviewDetail={() => {
+          const expanding = !ewDetailExpanded;
+          setEwDetailExpanded(expanding);
+          if (expanding) {
+            requestAnimationFrame(() =>
+              ewDetailRef.current?.scrollIntoView({ behavior: 'smooth' })
+            );
+          }
+        }}
       />
 
-      {/* ── 2a. Elevated panels (watch / alert / urgent) — detailed cards ── */}
+      {/* ── 2a. Elevated panels (watch / alert / urgent) ───────────────────────
+          Urgent cards are collapsed by default — they're already summarised in
+          the banner above. The slim EwCollapsedRow rows keep the section visible
+          and make it clear there's detail to review.
+          Watch / alert cards are never duplicated in the banner, so they always
+          render expanded.
+          ─────────────────────────────────────────────────────────────────────── */}
       {hasElevated && (
         <div ref={ewDetailRef} className="cq-alerts-area">
-          <EarlyWarningPanel
-            charterNumber={charterNumber}
-            period={period}
-            peerGroup={peerGroup}
-            token={token}
-            alerts={alerts}
-            ewData={ewData}
-            managed
-            visibleLevels={['watch', 'alert', 'urgent']}
-          />
+          {hasUrgent && !ewDetailExpanded ? (
+            <>
+              {/* Slim collapsed row for each urgent card — one per type */}
+              {urgentTypes.map(type => (
+                <EwCollapsedRow
+                  key={type}
+                  type={type}
+                  onExpand={() => {
+                    setEwDetailExpanded(true);
+                    requestAnimationFrame(() =>
+                      ewDetailRef.current?.scrollIntoView({ behavior: 'smooth' })
+                    );
+                  }}
+                />
+              ))}
+              {/* Non-urgent elevated cards (watch / alert) — always expanded */}
+              <EarlyWarningPanel
+                charterNumber={charterNumber}
+                period={period}
+                peerGroup={peerGroup}
+                token={token}
+                alerts={alerts}
+                ewData={ewData}
+                managed
+                visibleLevels={['watch', 'alert']}
+              />
+            </>
+          ) : (
+            /* Expanded state — all elevated cards (watch + alert + urgent) */
+            <EarlyWarningPanel
+              charterNumber={charterNumber}
+              period={period}
+              peerGroup={peerGroup}
+              token={token}
+              alerts={alerts}
+              ewData={ewData}
+              managed
+              visibleLevels={['watch', 'alert', 'urgent']}
+            />
+          )}
         </div>
       )}
 
