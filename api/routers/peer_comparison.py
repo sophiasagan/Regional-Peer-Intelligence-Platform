@@ -973,15 +973,23 @@ async def get_single_metric_trend(
     period: str = Query(...),
     peer_group: str = Query(default="REGIONAL"),
     n_periods: int = Query(default=12),
+    custom_charters: Optional[str] = Query(
+        default=None,
+        description="Comma-separated charter numbers — overrides peer_group when provided",
+    ),
 ):
     """Return peer band data for PeerBandChart: institution + p10/p50/p90 over time."""
     tenant_id = request.state.tenant_id
     require_entitlement(tenant_id, charter_number)
     periods = _trailing_periods(period, n=n_periods)
 
-    group_type = PeerGroupType(peer_group)
-    peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
-    label = peer_group_label(group_type, charter_number, period, DB_URL)
+    if custom_charters:
+        peer_charters = [int(c.strip()) for c in custom_charters.split(",") if c.strip().isdigit()]
+        label = f"Custom selection ({len(peer_charters)} institutions)"
+    else:
+        group_type = PeerGroupType(peer_group)
+        peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, db_url=DB_URL)
+        label = peer_group_label(group_type, charter_number, period, DB_URL)
 
     engine = get_engine(DB_URL)
     result_rows = []

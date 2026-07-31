@@ -323,6 +323,7 @@ export default function PeerBandChart({
   nPeriods  = 12,
   apiBase   = '/peer-comparison',   // override for auth-exempt contexts (e.g. onboarding wizard)
   token,
+  customCharters,   // number[] — forwarded as custom_charters when peerGroup === 'CUSTOM'
   // Optional override props (skip fetch when provided)
   institutionData,
   peerMedian: peerMedianProp,
@@ -346,8 +347,12 @@ export default function PeerBandChart({
     if (institutionData) return;  // skip fetch when data provided as props
     if (!charterNumber || !metric || !period) return;
     setLoading(true);
+    const params = new URLSearchParams({ period, peer_group: peerGroup, n_periods: nPeriods });
+    if (customCharters?.length && peerGroup === 'CUSTOM') {
+      params.set('custom_charters', customCharters.join(','));
+    }
     fetch(
-      `${API}${apiBase}/${charterNumber}/metric/${metric}?period=${period}&peer_group=${peerGroup}&n_periods=${nPeriods}`,
+      `${API}${apiBase}/${charterNumber}/metric/${metric}?${params}`,
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     )
       .then(r => r.ok ? r.json() : null)
@@ -360,7 +365,7 @@ export default function PeerBandChart({
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [metric, charterNumber, period, peerGroup, nPeriods, apiBase, token, institutionData]);
+  }, [metric, charterNumber, period, peerGroup, nPeriods, apiBase, token, customCharters, institutionData]);
 
   // Fetch REGIONAL data as comparison line when main peer group is not REGIONAL
   useEffect(() => {

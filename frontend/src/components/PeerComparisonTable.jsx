@@ -250,6 +250,7 @@ export default function PeerComparisonTable({
   peerGroupLabel = '',
   peerCount,
   token,
+  customCharters,     // number[] | null — forwarded to PeerBandChart when peerGroup === 'CUSTOM'
   onCustomCharters,   // (charters: number[] | null) => void
 }) {
   const [showPanel,      setShowPanel]      = useState(false);
@@ -400,6 +401,7 @@ export default function PeerComparisonTable({
                           charterNumber={charterNumber}
                           period={period}
                           peerGroup={peerGroup}
+                          customCharters={customCharters}
                           nPeriods={12}
                           token={token}
                         />
