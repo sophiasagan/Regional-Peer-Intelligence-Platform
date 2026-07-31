@@ -86,6 +86,14 @@ const METRIC_LABELS = {
   mortgage_originations: 'Mortgage Originations',
 };
 
+// Legend titles — lowercase "share" suffix, sentence-case metric name
+const LEGEND_TITLES = {
+  deposits:              'Deposits share',
+  loans:                 'Loans share',
+  members:               'Members share',
+  mortgage_originations: 'Mortgage originations share',
+};
+
 function useHeatmapData(charterNumber, metric, year, token) {
   const [counties, setCounties] = useState([]);
 
@@ -646,7 +654,7 @@ function PeriodSelector({ period, onPeriodChange, compareMode, comparePeriod, on
 function ColorLegend({ metric }) {
   return (
     <div className="color-legend">
-      <div className="legend-title">{METRIC_LABELS[metric] ?? metric} Share</div>
+      <div className="legend-title">{LEGEND_TITLES[metric] ?? `${metric} share`}</div>
       <div className="legend-scale">
         {[
           { color: SHARE_COLORS[0].color, label: '30%+' },
@@ -700,9 +708,9 @@ export default function MarketMap({ charterNumber, token }) {
   const mapContainerRef = useRef(null);
 
   const year = parseInt(period.slice(0, 4), 10);
-  // Map always colors by deposits — only metric with branch-level geographic data.
-  // activeMetric controls the right-panel competitor table, not the choropleth.
-  const heatmapCounties = useHeatmapData(charterNumber, 'deposits', year, token);
+  // Heatmap follows activeMetric. Backend currently implements deposits fully;
+  // other metrics will return data as they're added to compute_cu_allocations.
+  const heatmapCounties = useHeatmapData(charterNumber, activeMetric, year, token);
   const [competitorCounties, setCompetitorCounties] = useState([]);
 
   const customRegionFipsStr = [...customRegion.keys()].join(',');
@@ -835,7 +843,7 @@ export default function MarketMap({ charterNumber, token }) {
             </div>
           )}
 
-          <ColorLegend metric="deposits" />
+          <ColorLegend metric={activeMetric} />
         </div>
 
         {/* Right panel (40%) */}
