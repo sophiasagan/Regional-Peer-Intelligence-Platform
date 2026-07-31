@@ -188,6 +188,7 @@ class HeatmapResponse(BaseModel):
     metric: str
     year: int
     counties: list[HeatmapCounty]
+    metric_available: bool = True   # False when county-level allocation not yet built
 
 
 @router.get("/heatmap", response_model=HeatmapResponse)
@@ -205,6 +206,21 @@ async def get_institution_heatmap(
     """
     tenant_id = request.state.tenant_id
     require_entitlement(tenant_id, charter_number)
+
+    # Only deposits has a county-level allocation model. All other metrics need a
+    # dedicated per-county pipeline before they can drive the choropleth. Return an
+    # explicit metric_available=False so the frontend can show an honest "not yet
+    # modeled" state rather than silently reusing deposit data under the wrong label.
+    if metric != "deposits":
+        return HeatmapResponse(
+            charter_number=charter_number,
+            institution_name=None,
+            metric=metric,
+            year=year,
+            counties=[],
+            metric_available=False,
+        )
+
     from sqlalchemy import text as sa_text
     from db import get_engine
 

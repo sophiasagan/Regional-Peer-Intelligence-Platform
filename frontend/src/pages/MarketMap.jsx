@@ -119,6 +119,14 @@ const METRIC_LABELS = {
   mortgage_originations: 'Mortgage Originations',
 };
 
+// Human-readable scope label for the geo-unit clarification note
+const GEO_SCOPE_LABELS = {
+  county:        'county',
+  msa:           'MSA',
+  state:         'state',
+  custom_region: 'custom region',
+};
+
 // Legend titles — lowercase "share" suffix, sentence-case metric name
 const LEGEND_TITLES = {
   deposits:              'Deposits share',
@@ -128,22 +136,26 @@ const LEGEND_TITLES = {
 };
 
 function useHeatmapData(charterNumber, metric, year, token) {
-  const [counties, setCounties] = useState([]);
+  const [counties,        setCounties]        = useState([]);
+  const [metricAvailable, setMetricAvailable] = useState(true);
 
   useEffect(() => {
     if (!charterNumber || !year) return;
+    setCounties([]);          // clear stale data immediately on metric/year change
+    setMetricAvailable(true); // optimistic until response arrives
     fetch(`${API}/market-share/heatmap?charter_number=${charterNumber}&metric=${metric}&year=${year}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        console.log('[heatmap] response:', d?.counties?.length ?? 0, 'counties', d?.counties?.[0]);
+        console.log('[heatmap] response:', d?.counties?.length ?? 0, 'counties', d?.metric_available);
         if (d?.counties) setCounties(d.counties);
+        if (d != null) setMetricAvailable(d.metric_available !== false);
       })
       .catch(err => console.error('[heatmap] fetch failed:', err));
   }, [charterNumber, metric, year, token]);
 
-  return counties;
+  return { counties, metricAvailable };
 }
 
 // stateFips: 2-digit state FIPS string (e.g. '26') — when set, in-state counties
@@ -762,8 +774,8 @@ export default function MarketMap({ charterNumber, token }) {
   const year = parseInt(period.slice(0, 4), 10);
   // Heatmap follows activeMetric. Backend currently implements deposits fully;
   // other metrics will return data as they're added to compute_cu_allocations.
-  const heatmapCounties = useHeatmapData(charterNumber, activeMetric, year, token);
-  const breaks          = useMemo(() => computeBreaks(heatmapCounties), [heatmapCounties]);
+  const { counties: heatmapCounties, metricAvailable } = useHeatmapData(charterNumber, activeMetric, year, token);
+  const breaks = useMemo(() => computeBreaks(heatmapCounties), [heatmapCounties]);
   const [competitorCounties, setCompetitorCounties] = useState([]);
 
   const customRegionFipsStr = [...customRegion.keys()].join(',');
@@ -906,6 +918,29 @@ export default function MarketMap({ charterNumber, token }) {
 
           <div ref={mapContainerCb} className="mapbox-container" aria-label="Market share map" />
 
+          {/* Overlay shown when the selected metric has no county-level model yet */}
+          {!metricAvailable && (
+            <div className="map-metric-unavailable">
+              <div className="map-metric-unavailable-card">
+                <div className="map-unavail-title">
+                  County-level {METRIC_LABELS[activeMetric].toLowerCase()} share isn&apos;t modeled yet
+                </div>
+                <p className="map-unavail-body">
+                  Building per-county {METRIC_LABELS[activeMetric].toLowerCase()} allocation requires a
+                  dedicated data pipeline that hasn&apos;t been built for this metric. The{' '}
+                  <strong>Competitive Breakdown table</strong> on the right shows accurate{' '}
+                  {METRIC_LABELS[activeMetric].toLowerCase()} share across the selected geography.
+                </p>
+                <button
+                  className="map-unavail-toggle"
+                  onClick={() => setActiveMetric('deposits')}
+                >
+                  Show deposits map instead
+                </button>
+              </div>
+            </div>
+          )}
+
           {geoType === 'county' && selectedCounty && (
             <div className="selected-county-label">
               Viewing: <strong>{selectedCounty.name}</strong> ({selectedCounty.fips})
@@ -914,6 +949,19 @@ export default function MarketMap({ charterNumber, token }) {
           )}
 
           <ColorLegend metric={activeMetric} breaks={breaks} />
+
+          {/* Geo-unit clarification — only visible when choropleth is active */}
+          {metricAvailable && heatmapCounties.length > 0 && (
+            <div className="map-geo-note">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <circle cx="6" cy="6" r="5.5" stroke="#94A3B8" strokeWidth="1"/>
+                <rect x="5.25" y="4.5" width="1.5" height="4.5" rx=".75" fill="#94A3B8"/>
+                <circle cx="6" cy="3" r=".75" fill="#94A3B8"/>
+              </svg>
+              Map: per-county share · Table: total across selected{' '}
+              {GEO_SCOPE_LABELS[geoType] ?? 'geography'}
+            </div>
+          )}
         </div>
 
         {/* Right panel (40%) */}
