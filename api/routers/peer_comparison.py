@@ -64,6 +64,15 @@ def _tier_index(assets: float) -> int:
 # Display names for internal metric names
 METRIC_LABELS: dict[str, tuple[str, str]] = {
     # (metric_label, unit) — order controls display order in comparison table
+    # Balance Sheet / Growth — lead section
+    "acct_010":                        ("Total Assets",                   "$"),
+    "acct_025B":                       ("Total Loans and Leases",         "$"),
+    "acct_018":                        ("Total Shares and Deposits",      "$"),
+    "acct_083":                        ("Members",                        "count"),
+    "loan_growth_rate":                ("Loan Growth Rate",               "%"),
+    "share_growth_rate":               ("Share Growth Rate",              "%"),
+    "asset_growth_rate":               ("Asset Growth Rate",              "%"),
+    "member_growth_rate":              ("Member Growth Rate",             "%"),
     # Asset Quality
     "delinq_rate_total":               ("Total Delinquency Ratio",        "%"),
     "delinq_rate_90plus":              ("90+ Day Delinquency",            "%"),
@@ -87,15 +96,6 @@ METRIC_LABELS: dict[str, tuple[str, str]] = {
     "efficiency_ratio":                ("Efficiency Ratio",               "%"),
     # Lending / Balance Sheet
     "loan_to_share":                   ("Loan-to-Share Ratio",            "%"),
-    "acct_010":                        ("Total Assets",                   "$"),
-    "acct_025B":                       ("Total Loans and Leases",         "$"),
-    "acct_018":                        ("Total Shares and Deposits",      "$"),
-    "acct_083":                        ("Members",                        "count"),
-    # Growth (YoY — computed from prior-year same quarter)
-    "loan_growth_rate":                ("Loan Growth Rate",               "%"),
-    "share_growth_rate":               ("Share Growth Rate",              "%"),
-    "asset_growth_rate":               ("Asset Growth Rate",              "%"),
-    "member_growth_rate":              ("Member Growth Rate",             "%"),
 }
 
 DISPLAY_METRICS = list(METRIC_LABELS.keys())

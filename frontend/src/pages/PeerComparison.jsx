@@ -134,6 +134,7 @@ export default function PeerComparison({ charterNumber, token }) {
           peerGroup={customCharters ? 'CUSTOM' : peerGroup}
           peerGroupLabel={peerGroupLabel}
           peerCount={peerCount}
+          token={token}
           onCustomCharters={handleCustomCharters}
         />
       </div>

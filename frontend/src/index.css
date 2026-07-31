@@ -483,6 +483,19 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .polarity-indicator { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
 .numeric-col       { text-align: right !important; font-variant-numeric: tabular-nums; }
 
+/* ── Per-row chart toggle ── */
+.chart-toggle-col  { width: 32px; padding: 0 6px !important; text-align: center; white-space: nowrap; }
+.chart-toggle-btn  {
+  background: none; border: none; cursor: pointer; color: var(--text-muted);
+  border-radius: 4px; padding: 3px 4px; display: inline-flex; align-items: center;
+  transition: background .12s, color .12s;
+}
+.chart-toggle-btn:hover, .chart-toggle-btn.active { color: #1A237E; background: #EEF2FF; }
+
+/* ── Expanded chart row ── */
+.metric-chart-row td  { padding: 0 !important; border-top: none; border-bottom: 2px solid #E8EAF6; }
+.metric-chart-cell    { background: #F8F9FF; padding: 0 !important; }
+
 /* ── Metric library (nav — hidden when not rendered) ── */
 .metric-library      { width: 210px; flex-shrink: 0; border-right: 1px solid var(--border); background: #fff; overflow-y: auto; }
 .library-header      { padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--bg-gray); }

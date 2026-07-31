@@ -10,6 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import PeerBandChart from './PeerBandChart';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
@@ -221,6 +222,26 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// Inline SVG chevrons — Tabler-style, no package dependency
+function ChevronDown() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2.5"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+function ChevronUp() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2.5"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="6 15 12 9 18 15" />
+    </svg>
+  );
+}
+
 export default function PeerComparisonTable({
   metrics = [],
   charterNumber,
@@ -228,9 +249,19 @@ export default function PeerComparisonTable({
   peerGroup = 'REGIONAL',
   peerGroupLabel = '',
   peerCount,
+  token,
   onCustomCharters,   // (charters: number[] | null) => void
 }) {
-  const [showPanel, setShowPanel] = useState(false);
+  const [showPanel,      setShowPanel]      = useState(false);
+  const [expandedCharts, setExpandedCharts] = useState(new Set());
+
+  function toggleChart(metricName) {
+    setExpandedCharts(prev => {
+      const next = new Set(prev);
+      next.has(metricName) ? next.delete(metricName) : next.add(metricName);
+      return next;
+    });
+  }
 
   const handleDownload = useCallback(
     () => downloadCsv(metrics, charterNumber, period, peerGroupLabel),
@@ -305,6 +336,7 @@ export default function PeerComparisonTable({
                 {metrics.some(m => m.data_quality === 'custom_rank') ? 'Rank' : 'Percentile'}
               </th>
               <th>Stars</th>
+              <th className="chart-toggle-col" aria-label="Trend chart" />
             </tr>
           </thead>
           <tbody>
@@ -312,45 +344,69 @@ export default function PeerComparisonTable({
               const isTop    = m.percentile_rank != null && m.percentile_rank >= 90;
               const isBottom = m.percentile_rank != null && m.percentile_rank < 10;
               // Custom rank coloring: rank_pos===1 → best, rank_pos===n_total → worst
-              const nTotal   = m.peer_n != null ? m.peer_n + 1 : null;
+              const nTotal        = m.peer_n != null ? m.peer_n + 1 : null;
               const isCustomTop    = m.data_quality === 'custom_rank' && m.rank_pos === 1;
               const isCustomBottom = m.data_quality === 'custom_rank' && nTotal != null && m.rank_pos === nTotal;
               const rowTop    = isTop    || isCustomTop;
               const rowBottom = isBottom || isCustomBottom;
+              const chartOpen = expandedCharts.has(m.metric_name);
               return (
-                <tr
-                  key={m.metric_name}
-                  className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}
-                >
-                  <td className="metric-name-cell">
-                    <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
-                      {m.is_adverse ? '↓' : '↑'}
-                    </span>
-                    {m.metric_label}
-                  </td>
-                  <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
-                  <td className="numeric-col">{fmt(m.peer_median,       m.unit)}</td>
-                  <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
-                  <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
-                  <td className="numeric-col">
-                    {m.percentile_rank != null
-                      ? `${Math.round(m.percentile_rank)}th`
-                      : m.data_quality === 'custom_rank'
-                        ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
-                            {m.rank_ordinal ?? '—'}
-                          </span>
-                        : m.data_quality === 'insufficient_peer_data'
-                          ? <span className="muted" title="Too few peer institutions for reliable scoring">
-                              {`— (n=${m.peer_n ?? '?'})`}
+                <React.Fragment key={m.metric_name}>
+                  <tr className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}>
+                    <td className="metric-name-cell">
+                      <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
+                        {m.is_adverse ? '↓' : '↑'}
+                      </span>
+                      {m.metric_label}
+                    </td>
+                    <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
+                    <td className="numeric-col">{fmt(m.peer_median,       m.unit)}</td>
+                    <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
+                    <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
+                    <td className="numeric-col">
+                      {m.percentile_rank != null
+                        ? `${Math.round(m.percentile_rank)}th`
+                        : m.data_quality === 'custom_rank'
+                          ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
+                              {m.rank_ordinal ?? '—'}
                             </span>
-                          : m.data_quality === 'zero_variance'
-                            ? <span className="muted" title="All peers report identical values — percentile undefined">
-                                {m.rank_ordinal ?? 'tied (all equal)'}
+                          : m.data_quality === 'insufficient_peer_data'
+                            ? <span className="muted" title="Too few peer institutions for reliable scoring">
+                                {`— (n=${m.peer_n ?? '?'})`}
                               </span>
-                            : '—'}
-                  </td>
-                  <td><Stars count={m.stars} /></td>
-                </tr>
+                            : m.data_quality === 'zero_variance'
+                              ? <span className="muted" title="All peers report identical values — percentile undefined">
+                                  {m.rank_ordinal ?? 'tied (all equal)'}
+                                </span>
+                              : '—'}
+                    </td>
+                    <td><Stars count={m.stars} /></td>
+                    <td className="chart-toggle-col">
+                      <button
+                        className={`chart-toggle-btn${chartOpen ? ' active' : ''}`}
+                        onClick={() => toggleChart(m.metric_name)}
+                        aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
+                        title={chartOpen ? 'Collapse chart' : 'View 3-year trend'}
+                      >
+                        {chartOpen ? <ChevronUp /> : <ChevronDown />}
+                      </button>
+                    </td>
+                  </tr>
+                  {chartOpen && (
+                    <tr className="metric-chart-row">
+                      <td colSpan={8} className="metric-chart-cell">
+                        <PeerBandChart
+                          metric={m.metric_name}
+                          charterNumber={charterNumber}
+                          period={period}
+                          peerGroup={peerGroup}
+                          nPeriods={12}
+                          token={token}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>
