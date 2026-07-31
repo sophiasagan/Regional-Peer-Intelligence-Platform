@@ -404,6 +404,7 @@ export default function PeerComparisonTable({
                           customCharters={customCharters}
                           nPeriods={12}
                           token={token}
+                          unit={m.unit}
                         />
                       </td>
                     </tr>

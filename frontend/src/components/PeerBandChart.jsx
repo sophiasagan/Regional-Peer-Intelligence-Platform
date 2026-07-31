@@ -65,8 +65,10 @@ function fmt(v, unit = '%') {
 
 function fmtAxisTick(v, unit) {
   if (v == null) return '';
-  if (unit === '%') return `${(v * 100).toFixed(2)}%`;
-  if (unit === 'x') return `${v.toFixed(2)}x`;
+  if (unit === '%')     return `${(v * 100).toFixed(2)}%`;
+  if (unit === 'x')     return `${v.toFixed(2)}x`;
+  if (unit === 'count') return Math.round(v).toLocaleString();
+  if (unit === '$')     return v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : `$${(v/1e6).toFixed(0)}M`;
   return v.toFixed(2);
 }
 
@@ -435,13 +437,28 @@ export default function PeerBandChart({
   const deltaRaw      = (lastPoint?.institution != null && prevPoint?.institution != null)
     ? lastPoint.institution - prevPoint.institution : null;
   let deltaBadge = null;
-  if (deltaRaw != null && (unit === '%' || unit === 'x')) {
-    const sign   = deltaRaw >= 0 ? '+' : '';
+  if (deltaRaw != null) {
     const isGood = isAdverse ? deltaRaw <= 0 : deltaRaw >= 0;
-    const suffix = unit === '%' ? 'pp' : 'x';
-    const mag    = unit === '%'
-      ? `${sign}${(deltaRaw * 100).toFixed(2)}${suffix}`
-      : `${sign}${deltaRaw.toFixed(3)}${suffix}`;
+    let mag;
+    if (unit === '%') {
+      const sign = deltaRaw >= 0 ? '+' : '';
+      mag = `${sign}${(deltaRaw * 100).toFixed(2)}pp`;
+    } else if (unit === 'x') {
+      const sign = deltaRaw >= 0 ? '+' : '';
+      mag = `${sign}${deltaRaw.toFixed(3)}x`;
+    } else if (unit === 'count') {
+      const rounded = Math.round(deltaRaw);
+      mag = (rounded >= 0 ? '+' : '') + rounded.toLocaleString();
+    } else if (unit === '$') {
+      const absVal = Math.abs(deltaRaw);
+      const prefix = deltaRaw >= 0 ? '+$' : '-$';
+      mag = absVal >= 1e9
+        ? `${prefix}${(absVal / 1e9).toFixed(2)}B`
+        : `${prefix}${(absVal / 1e6).toFixed(1)}M`;
+    } else {
+      const sign = deltaRaw >= 0 ? '+' : '';
+      mag = `${sign}${deltaRaw.toFixed(3)}`;
+    }
     deltaBadge = { label: (deltaRaw >= 0 ? '▲ ' : '▼ ') + mag, good: isGood };
   }
 
