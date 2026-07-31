@@ -914,32 +914,21 @@ export default function MarketMap({ charterNumber, token }) {
               onComparePeriodChange={setComparePeriod}
             />
             <MapMetricBar activeMetric={activeMetric} onChange={setActiveMetric} />
+            {!metricAvailable && (
+              <div className="map-metric-caption">
+                County-level {METRIC_LABELS[activeMetric].toLowerCase()} share not yet available
+                — see the table for exact figures.{' '}
+                <button
+                  className="map-metric-caption-link"
+                  onClick={() => setActiveMetric('deposits')}
+                >
+                  Show deposits map
+                </button>
+              </div>
+            )}
           </div>
 
           <div ref={mapContainerCb} className="mapbox-container" aria-label="Market share map" />
-
-          {/* Overlay shown when the selected metric has no county-level model yet */}
-          {!metricAvailable && (
-            <div className="map-metric-unavailable">
-              <div className="map-metric-unavailable-card">
-                <div className="map-unavail-title">
-                  County-level {METRIC_LABELS[activeMetric].toLowerCase()} share isn&apos;t modeled yet
-                </div>
-                <p className="map-unavail-body">
-                  Building per-county {METRIC_LABELS[activeMetric].toLowerCase()} allocation requires a
-                  dedicated data pipeline that hasn&apos;t been built for this metric. The{' '}
-                  <strong>Competitive Breakdown table</strong> on the right shows accurate{' '}
-                  {METRIC_LABELS[activeMetric].toLowerCase()} share across the selected geography.
-                </p>
-                <button
-                  className="map-unavail-toggle"
-                  onClick={() => setActiveMetric('deposits')}
-                >
-                  Show deposits map instead
-                </button>
-              </div>
-            </div>
-          )}
 
           {geoType === 'county' && selectedCounty && (
             <div className="selected-county-label">
@@ -948,7 +937,7 @@ export default function MarketMap({ charterNumber, token }) {
             </div>
           )}
 
-          <ColorLegend metric={activeMetric} breaks={breaks} />
+          {metricAvailable && <ColorLegend metric={activeMetric} breaks={breaks} />}
 
           {/* Geo-unit clarification — only visible when choropleth is active */}
           {metricAvailable && heatmapCounties.length > 0 && (
