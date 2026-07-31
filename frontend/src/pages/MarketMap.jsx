@@ -36,6 +36,39 @@ const NO_DATA_COLOR         = '#E5E7EB';
 const REGION_SELECTED_COLOR = '#C4B5FD'; // indigo-300 — custom region selected counties
 const STATE_NO_DATA_COLOR   = '#BFDBFE'; // blue-200 — in-state counties with no share data
 
+// Approximate bounding boxes [minLng, minLat, maxLng, maxLat] per 2-digit state FIPS
+const STATE_BBOX = {
+  '01':[-88.5,30.1,-84.9,35.0],'02':[-180,51.2,-130,71.4],'04':[-114.8,31.3,-109.0,37.0],
+  '05':[-94.6,33.0,-89.6,36.5],'06':[-124.5,32.5,-114.1,42.0],'08':[-109.1,36.9,-102.0,41.0],
+  '09':[-73.7,40.9,-71.8,42.1],'10':[-75.8,38.4,-75.0,39.8],'11':[-77.1,38.8,-76.9,39.0],
+  '12':[-87.6,24.5,-80.0,31.0],'13':[-85.6,30.4,-80.8,35.0],'15':[-178.3,18.9,-154.8,28.4],
+  '16':[-117.2,41.9,-111.0,49.0],'17':[-91.5,36.9,-87.5,42.5],'18':[-88.1,37.8,-84.8,41.8],
+  '19':[-96.6,40.4,-90.1,43.5],'20':[-102.1,37.0,-94.6,40.0],'21':[-89.6,36.5,-81.9,39.1],
+  '22':[-94.0,28.9,-88.8,33.0],'23':[-71.1,43.1,-66.9,47.5],'24':[-79.5,37.9,-75.0,39.7],
+  '25':[-73.5,41.2,-69.9,42.9],'26':[-90.4,41.7,-82.4,48.3],'27':[-97.2,43.5,-89.5,49.4],
+  '28':[-91.7,30.2,-88.1,35.0],'29':[-95.8,36.0,-89.1,40.6],'30':[-116.1,44.4,-104.0,49.0],
+  '31':[-104.1,40.0,-95.3,43.0],'32':[-120.0,35.0,-114.0,42.0],'33':[-72.6,42.7,-70.7,45.3],
+  '34':[-75.6,38.9,-73.9,41.4],'35':[-109.1,31.3,-103.0,37.0],'36':[-79.8,40.5,-71.9,45.0],
+  '37':[-84.3,33.8,-75.5,36.6],'38':[-104.1,45.9,-96.6,49.0],'39':[-84.8,38.4,-80.5,42.3],
+  '40':[-103.0,33.6,-94.4,37.0],'41':[-124.6,42.0,-116.5,46.3],'42':[-80.5,39.7,-74.7,42.3],
+  '44':[-71.9,41.1,-71.1,42.0],'45':[-83.4,32.0,-78.5,35.2],'46':[-104.1,42.5,-96.4,45.9],
+  '47':[-90.3,34.9,-81.6,36.7],'48':[-106.6,25.8,-93.5,36.5],'49':[-114.1,37.0,-109.0,42.0],
+  '50':[-73.4,42.7,-71.5,45.0],'51':[-83.7,36.5,-75.2,39.5],'53':[-124.8,45.5,-116.9,49.0],
+  '54':[-82.6,37.2,-77.7,40.6],'55':[-92.9,42.5,-86.8,47.1],'56':[-111.1,41.0,-104.1,45.0],
+};
+
+// Quantile breaks (p25/p50/p75) from actual heatmap share values for data-driven coloring.
+// Returns null when fewer than 4 data points — callers fall back to fixed thresholds.
+function computeBreaks(counties) {
+  const vals = counties
+    .map(c => c.market_share)
+    .filter(v => v != null && v > 0)
+    .sort((a, b) => a - b);
+  if (vals.length < 4) return null;
+  const at = p => vals[Math.min(Math.floor(p * vals.length), vals.length - 1)];
+  return [at(0.25), at(0.50), at(0.75)];
+}
+
 function shareToColor(share) {
   for (const { threshold, color } of SHARE_COLORS) {
     if (share >= threshold) return color;
@@ -116,7 +149,7 @@ function useHeatmapData(charterNumber, metric, year, token) {
 // stateFips: 2-digit state FIPS string (e.g. '26') — when set, in-state counties
 // with no share data get STATE_NO_DATA_COLOR instead of plain grey so the state
 // shape is visible even where the institution has no deposits.
-function buildColorExpression(heatmapCounties, competitorCounties, stateFips = null) {
+function buildColorExpression(heatmapCounties, competitorCounties, stateFips = null, breaks = null) {
   const competitorFips = new Set(competitorCounties.map(c => c.county_fips));
   const matchPairs = [];
   for (const county of heatmapCounties) {
@@ -153,6 +186,7 @@ function buildColorExpression(heatmapCounties, competitorCounties, stateFips = n
       ]
     : [];
 
+  const [b1, b2, b3] = breaks ?? [0.05, 0.15, 0.30];
   return [
     'case',
     ...competitorClause,
@@ -160,9 +194,9 @@ function buildColorExpression(heatmapCounties, competitorCounties, stateFips = n
     ['<', shareExpr, 0], NO_DATA_COLOR,
     ['step', shareExpr,
       SHARE_COLORS[3].color,
-      0.05, SHARE_COLORS[2].color,
-      0.15, SHARE_COLORS[1].color,
-      0.30, SHARE_COLORS[0].color,
+      b1, SHARE_COLORS[2].color,
+      b2, SHARE_COLORS[1].color,
+      b3, SHARE_COLORS[0].color,
     ],
   ];
 }
@@ -185,6 +219,7 @@ function buildOutlineExpr(customRegionFips, stateFips) {
 function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) {
   const mapRef            = useRef(null);
   const loadedRef         = useRef(false);
+  const pendingFitRef     = useRef(null);
   const colorExprRef      = useRef(colorExpr);
   const regionOutlineRef  = useRef(regionOutlineExpr);
   // Always call the LATEST onCountyClick — geoType changes what it does (county
@@ -272,6 +307,11 @@ function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) 
         console.error('[MarketMap] setPaintProperty on load failed:', err);
       }
 
+      if (pendingFitRef.current) {
+        try { map.fitBounds(pendingFitRef.current, { padding: 50, duration: 800 }); } catch (_) {}
+        pendingFitRef.current = null;
+      }
+
       // Helper: extract FIPS from a clicked feature
       // Plotly GeoJSON stores FIPS as the top-level "id" string on each feature.
       // MapLibre exposes this as feature.id in click/mousemove events.
@@ -350,6 +390,16 @@ function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) 
       console.error('[MarketMap] region outline update failed:', err);
     }
   }, [regionOutlineExpr]);
+
+  const fitBounds = useCallback((bounds) => {
+    if (loadedRef.current && mapRef.current) {
+      try { mapRef.current.fitBounds(bounds, { padding: 50, duration: 800 }); } catch (_) {}
+    } else {
+      pendingFitRef.current = bounds;
+    }
+  }, []);
+
+  return { fitBounds };
 }
 
 // ── Shared autocomplete hook ──────────────────────────────────────────────────
@@ -651,16 +701,18 @@ function PeriodSelector({ period, onPeriodChange, compareMode, comparePeriod, on
   );
 }
 
-function ColorLegend({ metric }) {
+function ColorLegend({ metric, breaks }) {
+  const [b1, b2, b3] = breaks ?? [0.05, 0.15, 0.30];
+  const pct = v => `${(v * 100).toFixed(1)}%`;
   return (
     <div className="color-legend">
       <div className="legend-title">{LEGEND_TITLES[metric] ?? `${metric} share`}</div>
       <div className="legend-scale">
         {[
-          { color: SHARE_COLORS[0].color, label: '30%+' },
-          { color: SHARE_COLORS[1].color, label: '15–30%' },
-          { color: SHARE_COLORS[2].color, label: '5–15%' },
-          { color: SHARE_COLORS[3].color, label: '0–5%' },
+          { color: SHARE_COLORS[0].color, label: `${pct(b3)}+` },
+          { color: SHARE_COLORS[1].color, label: `${pct(b2)}–${pct(b3)}` },
+          { color: SHARE_COLORS[2].color, label: `${pct(b1)}–${pct(b2)}` },
+          { color: SHARE_COLORS[3].color, label: `< ${pct(b1)}` },
           { color: NO_DATA_COLOR,         label: 'No data' },
         ].map(({ color, label }) => (
           <div key={label} className="legend-row">
@@ -711,6 +763,7 @@ export default function MarketMap({ charterNumber, token }) {
   // Heatmap follows activeMetric. Backend currently implements deposits fully;
   // other metrics will return data as they're added to compute_cu_allocations.
   const heatmapCounties = useHeatmapData(charterNumber, activeMetric, year, token);
+  const breaks          = useMemo(() => computeBreaks(heatmapCounties), [heatmapCounties]);
   const [competitorCounties, setCompetitorCounties] = useState([]);
 
   const customRegionFipsStr = [...customRegion.keys()].join(',');
@@ -728,8 +781,9 @@ export default function MarketMap({ charterNumber, token }) {
       heatmapCounties,
       selectedCompId ? competitorCounties : [],
       stateFips,
+      breaks,
     ),
-    [heatmapCounties, competitorCounties, selectedCompId, stateFips],
+    [heatmapCounties, competitorCounties, selectedCompId, stateFips, breaks],
   );
 
   const regionOutlineExpr = useMemo(
@@ -781,7 +835,23 @@ export default function MarketMap({ charterNumber, token }) {
   }), []);
 
   const mapContainerCb = useCallback(el => { mapContainerRef.current = el; }, []);
-  useMapLibre(mapContainerRef, handleCountyClick, colorExpr, regionOutlineExpr);
+  const { fitBounds }  = useMapLibre(mapContainerRef, handleCountyClick, colorExpr, regionOutlineExpr);
+
+  // Auto-fit viewport to the institution's operating states when heatmap data arrives
+  useEffect(() => {
+    if (!heatmapCounties.length) return;
+    const stateFipsSet = new Set(
+      heatmapCounties.map(c => String(Math.floor(parseInt(c.county_fips, 10) / 1000)).padStart(2, '0'))
+    );
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    for (const fips of stateFipsSet) {
+      const bb = STATE_BBOX[fips];
+      if (!bb) continue;
+      if (bb[0] < minLng) minLng = bb[0]; if (bb[1] < minLat) minLat = bb[1];
+      if (bb[2] > maxLng) maxLng = bb[2]; if (bb[3] > maxLat) maxLat = bb[3];
+    }
+    if (minLng < Infinity) fitBounds([[minLng, minLat], [maxLng, maxLat]]);
+  }, [heatmapCounties, fitBounds]);
 
   useEffect(() => {
     if (!selectedCompId?.startsWith('ncua:')) {
@@ -843,7 +913,7 @@ export default function MarketMap({ charterNumber, token }) {
             </div>
           )}
 
-          <ColorLegend metric={activeMetric} />
+          <ColorLegend metric={activeMetric} breaks={breaks} />
         </div>
 
         {/* Right panel (40%) */}
