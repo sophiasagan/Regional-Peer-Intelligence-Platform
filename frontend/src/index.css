@@ -484,13 +484,15 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .numeric-col       { text-align: right !important; font-variant-numeric: tabular-nums; }
 
 /* ── Per-row chart toggle ── */
-.chart-toggle-col  { width: 32px; padding: 0 6px !important; text-align: center; white-space: nowrap; }
+.chart-toggle-col  { width: 80px; padding: 0 6px !important; text-align: center; white-space: nowrap; }
 .chart-toggle-btn  {
   background: none; border: none; cursor: pointer; color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: 4px;
   border-radius: 4px; padding: 3px 4px; display: inline-flex; align-items: center;
   transition: background .12s, color .12s;
 }
 .chart-toggle-btn:hover, .chart-toggle-btn.active { color: #1A237E; background: #EEF2FF; }
+.chart-toggle-label { font-size: 11px; font-weight: 500; letter-spacing: .01em; }
 
 /* ── Category section headers (collapsible) ── */
 .cat-section-header-row { cursor: pointer; user-select: none; }

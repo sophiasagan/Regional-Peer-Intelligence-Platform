@@ -398,7 +398,7 @@ export default function PeerComparisonTable({
                 {hasAnyCustomRank ? 'Rank' : 'Percentile'}
               </th>
               <th>Stars</th>
-              <th className="chart-toggle-col" aria-label="Trend chart" />
+              <th className="chart-toggle-col">Trend</th>
             </tr>
           </thead>
           <tbody>
@@ -471,6 +471,7 @@ export default function PeerComparisonTable({
                               aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
                               title={chartOpen ? 'Collapse chart' : 'View 3-year trend'}
                             >
+                              <span className="chart-toggle-label">{chartOpen ? 'Close' : 'Trend'}</span>
                               {chartOpen ? <ChevronUp /> : <ChevronDown />}
                             </button>
                           </td>
