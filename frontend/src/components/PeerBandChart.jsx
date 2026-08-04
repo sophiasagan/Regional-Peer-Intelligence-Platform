@@ -29,6 +29,10 @@ import {
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
+// Market share metrics: Ask Magnus is disabled for these until the full
+// geographic market-share semantic layer is wired into the chart data path.
+const SKIP_ASK_MAGNUS = new Set(['deposit_market_share_pct', 'loan_market_share_pct']);
+
 const C = {
   institution: '#1565C0',
   topDecile:   '#0F6E56',
@@ -338,11 +342,14 @@ export default function PeerBandChart({
   unit = '%',
   onPeerGroupChange,
 }) {
-  const [apiData,        setApiData]        = useState(null);
+  const [apiData,         setApiData]         = useState(null);
   const [regionalApiData, setRegionalApiData] = useState(null);
-  const [meta,           setMeta]           = useState(null);
-  const [peerDetails,    setPeerDetails]    = useState(null);
-  const [loading,        setLoading]        = useState(false);
+  const [meta,            setMeta]            = useState(null);
+  const [peerDetails,     setPeerDetails]     = useState(null);
+  const [loading,         setLoading]         = useState(false);
+  const [magnusOpen,      setMagnusOpen]      = useState(false);
+  const [magnusText,      setMagnusText]      = useState('');
+  const [magnusLoading,   setMagnusLoading]   = useState(false);
 
   // Fetch main peer group data
   useEffect(() => {
@@ -471,6 +478,44 @@ export default function PeerBandChart({
 
   const axisTickFmt = v => fmtAxisTick(v, unit);
 
+  // handleAskMagnus must be defined here — after plotData, lastPoint, adjustedRank,
+  // metricLabel, peerGroupLabel, isAdverse are all computed — so their values can
+  // appear in the useCallback dependency array without a temporal dead-zone error.
+  const handleAskMagnus = async () => {
+    if (magnusOpen && magnusText && !magnusLoading) { setMagnusOpen(false); return; }
+    setMagnusOpen(true);
+    if (magnusText) return;
+    setMagnusLoading(true);
+    try {
+      const trendSeries = plotData
+        .filter(d => d.institution != null || d.p50 != null)
+        .map(d => ({ period: d.period, institution_value: d.institution ?? null, peer_median: d.p50 ?? null }));
+      const res = await fetch(`${API}/insights/chart-narrative`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          metric_name:       metric,
+          metric_label:      metricLabel,
+          unit,
+          institution_value: lastPoint?.institution ?? null,
+          peer_median:       lastPoint?.p50 ?? null,
+          top_decile:        lastPoint?.topDecileLine ?? null,
+          bottom_decile:     lastPoint?.bottomDecileLine ?? null,
+          percentile_rank:   adjustedRank,
+          trend_series:      trendSeries,
+          peer_group_label:  peerGroupLabel,
+          period,
+          is_adverse:        isAdverse,
+        }),
+      });
+      setMagnusText(res.ok ? (await res.json()).narrative : 'Unable to generate insight — please try again.');
+    } catch {
+      setMagnusText('Unable to generate insight — please try again.');
+    } finally {
+      setMagnusLoading(false);
+    }
+  };
+
   return (
     <div className="peer-band-chart">
 
@@ -499,6 +544,15 @@ export default function PeerBandChart({
           ) : (
             <span className="peer-group-pill">{peerGroupLabel}</span>
           )}
+          {!SKIP_ASK_MAGNUS.has(metric) && (
+            <button
+              className={`ask-magnus-btn${magnusOpen ? ' active' : ''}`}
+              onClick={handleAskMagnus}
+              title="AI insight for this metric"
+            >
+              {magnusOpen && !magnusLoading ? '✕ Close' : '✦ Ask Magnus'}
+            </button>
+          )}
           <button
             className="download-btn"
             onClick={handleDownload}
@@ -508,6 +562,20 @@ export default function PeerBandChart({
           </button>
         </div>
       </div>
+
+      {/* ── Ask Magnus insight panel ── */}
+      {magnusOpen && (
+        <div className="ask-magnus-popover" role="status" aria-live="polite">
+          {magnusLoading ? (
+            <span className="am-spinner" aria-hidden />
+          ) : (
+            <span className="am-icon" aria-hidden>✦</span>
+          )}
+          <p className="ask-magnus-text">
+            {magnusLoading ? 'Generating insight…' : magnusText}
+          </p>
+        </div>
+      )}
 
       {/* ── Chart ── */}
       <ResponsiveContainer width="100%" height={420}>

@@ -698,9 +698,10 @@ export default function CreditQuality({ charterNumber, token }) {
               metric={activeMetric}
               charterNumber={charterNumber}
               period={period}
-              peerGroup={peerGroup}
+              peerGroup={customCharters?.length ? 'CUSTOM' : peerGroup}
               nPeriods={nPeriods}
               token={token}
+              customCharters={customCharters}
             />
 
             {/* Signal separator — below every delinquency/charge-off chart */}
@@ -765,9 +766,11 @@ export default function CreditQuality({ charterNumber, token }) {
             metrics={comparison?.metrics ?? []}
             charterNumber={charterNumber}
             period={period}
-            peerGroup={peerGroup}
+            peerGroup={customCharters?.length ? 'CUSTOM' : peerGroup}
             peerGroupLabel={peerLabel}
             peerCount={comparison?.peer_count}
+            token={token}
+            customCharters={customCharters}
             onCustomCharters={setCustomCharters}
           />
         </div>

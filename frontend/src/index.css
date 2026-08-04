@@ -1238,3 +1238,47 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 }
 .more-metrics-item:hover { background: var(--bg-gray); }
 .more-metrics-item.active { background: #E8EAF6; color: #1A237E; font-weight: 600; }
+
+/* ── Ask Magnus button + insight panel ───────────────────────────────────── */
+.ask-magnus-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 20px;
+  border: 1.5px solid #3949AB;
+  background: transparent;
+  color: #3949AB;
+  cursor: pointer;
+  transition: background .14s, color .14s;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.ask-magnus-btn:hover     { background: #3949AB; color: #fff; }
+.ask-magnus-btn.active    { background: #E8EAF6; color: #1A237E; border-color: #1A237E; }
+
+.ask-magnus-popover {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #F0F4FF;
+  border: 1px solid #C5CAE9;
+  border-radius: 8px;
+  padding: 11px 14px;
+  margin: 0 0 10px;
+}
+.am-icon { color: #3949AB; font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+.am-spinner {
+  width: 13px; height: 13px;
+  border: 2px solid #C5CAE9; border-top-color: #3949AB;
+  border-radius: 50%;
+  animation: nl-spin .6s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.ask-magnus-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #1A237E;
+  margin: 0;
+}

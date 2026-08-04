@@ -11,12 +11,17 @@ import Home             from './pages/Home'
 
 const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN ?? 'demo';
 
+// Ask Intelligence is hidden by default while the semantic layer is incomplete.
+// Set VITE_SHOW_ASK_INTELLIGENCE=true in .env to re-enable the nav link.
+// The route stays mounted regardless so the page can be accessed directly for testing.
+const _SHOW_ASK = import.meta.env.VITE_SHOW_ASK_INTELLIGENCE === 'true';
+
 const NAV = [
   { to: '/home',             icon: '🏠', label: 'Home'             },
   { to: '/credit-quality',   icon: '📊', label: 'Credit Quality'   },
   { to: '/market-map',       icon: '🗺',  label: 'Market Map'       },
   { to: '/peer-comparison',  icon: '⚖️',  label: 'Peer Comparison'  },
-  { to: '/query',            icon: '💬', label: 'Ask Intelligence' },
+  ...(_SHOW_ASK ? [{ to: '/query', icon: '💬', label: 'Ask Intelligence' }] : []),
   { to: '/reports',          icon: '📄', label: 'Reports'          },
   { to: '/peer-group-setup', icon: '🔀', label: 'Peer Group Setup' },
 ]

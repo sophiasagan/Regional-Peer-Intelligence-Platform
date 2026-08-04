@@ -34,7 +34,7 @@ class NaNSafeJSONResponse(JSONResponse):
             separators=(",", ":"),
         ).encode("utf-8")
 
-from api.routers import admin, alerts, geography, market_share, onboarding, peer_comparison, query, reports
+from api.routers import admin, alerts, geography, insights, market_share, onboarding, peer_comparison, query, reports
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +176,7 @@ async def get_institution(charter_number: int, period: str = "2026Q1"):
 
 
 app.include_router(admin.router,           prefix="/admin",           tags=["admin"])
+app.include_router(insights.router,        prefix="/insights",         tags=["insights"])
 app.include_router(geography.router,       prefix="/geography",       tags=["geography"])
 app.include_router(market_share.router,    prefix="/market-share",    tags=["market-share"])
 app.include_router(peer_comparison.router, prefix="/peer-comparison",  tags=["peer-comparison"])
