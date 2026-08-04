@@ -7,10 +7,12 @@
  *
  * Stars: 1–5 on every row (Callahan scale).
  * Download: full table as CSV — non-negotiable (P76 / Callahan rule).
+ * Categories: metrics are grouped into collapsible sections (all expanded by default).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import PeerBandChart from './PeerBandChart';
+import { METRIC_CATEGORIES, METRIC_TO_CATEGORY } from '../utils/metricCategories.js';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
@@ -45,11 +47,13 @@ function fmtAssets(v) {
   return `$${v.toLocaleString()}`;
 }
 
+// Export all metrics regardless of collapse state; adds Category column.
 function downloadCsv(metrics, charterNumber, period, peerGroupLabel) {
   if (!metrics?.length) return;
   const meta    = `Peer Group: ${peerGroupLabel},Charter: ${charterNumber},Period: ${period}`;
-  const headers = 'Metric,Your Value,Peer Median,Top Decile (90th),Bottom Decile (10th),Percentile,Stars,Adverse';
+  const headers = 'Category,Metric,Your Value,Peer Median,Top Decile (90th),Bottom Decile (10th),Percentile,Stars,Adverse';
   const rows    = metrics.map(m => [
+    `"${METRIC_TO_CATEGORY[m.metric_name] ?? ''}"`,
     `"${m.metric_label}"`,
     m.institution_value ?? '',
     m.peer_median        ?? '',
@@ -242,6 +246,22 @@ function ChevronUp() {
   );
 }
 
+// Group the incoming metrics prop into category sections.
+// Returns { sections: [{key, label, rows}], uncategorized: MetricRow[] }
+function buildSections(metrics) {
+  const metricMap     = Object.fromEntries(metrics.map(m => [m.metric_name, m]));
+  const categorized   = new Set(METRIC_CATEGORIES.flatMap(c => c.metrics));
+  const uncategorized = metrics.filter(m => !categorized.has(m.metric_name));
+
+  const sections = METRIC_CATEGORIES.map(cat => ({
+    key:   cat.key,
+    label: cat.label,
+    rows:  cat.metrics.map(k => metricMap[k]).filter(Boolean),
+  })).filter(s => s.rows.length > 0);
+
+  return { sections, uncategorized };
+}
+
 export default function PeerComparisonTable({
   metrics = [],
   charterNumber,
@@ -253,13 +273,23 @@ export default function PeerComparisonTable({
   customCharters,     // number[] | null — forwarded to PeerBandChart when peerGroup === 'CUSTOM'
   onCustomCharters,   // (charters: number[] | null) => void
 }) {
-  const [showPanel,      setShowPanel]      = useState(false);
-  const [expandedCharts, setExpandedCharts] = useState(new Set());
+  const [showPanel,         setShowPanel]         = useState(false);
+  const [expandedCharts,    setExpandedCharts]    = useState(new Set());
+  // collapsedSections: Set of category keys; empty = all expanded (default)
+  const [collapsedSections, setCollapsedSections] = useState(new Set());
 
   function toggleChart(metricName) {
     setExpandedCharts(prev => {
       const next = new Set(prev);
       next.has(metricName) ? next.delete(metricName) : next.add(metricName);
+      return next;
+    });
+  }
+
+  function toggleSection(key) {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   }
@@ -280,6 +310,23 @@ export default function PeerComparisonTable({
 
   const isCustom = peerGroupLabel.startsWith('Custom');
 
+  const { sections, uncategorized } = buildSections(metrics);
+  const allSectionKeys = sections.map(s => s.key);
+  const allCollapsed   = allSectionKeys.length > 0 && allSectionKeys.every(k => collapsedSections.has(k));
+
+  // Warn if any metric came back from the API without a category mapping
+  if (uncategorized.length > 0) {
+    console.warn(
+      '[PeerComparisonTable] Uncategorized metrics — add to metricCategories.js:',
+      uncategorized.map(m => m.metric_name),
+    );
+  }
+
+  // Column count — keep in sync with thead
+  const COL_SPAN = 8;
+
+  const hasAnyCustomRank = metrics.some(m => m.data_quality === 'custom_rank');
+
   return (
     <div className="peer-comparison-table-wrapper">
       <div className="table-header">
@@ -299,6 +346,20 @@ export default function PeerComparisonTable({
           {isCustom && (
             <button className="cm-link-btn" onClick={handleReset} style={{ fontSize: 12, color: '#757575' }}>
               Reset
+            </button>
+          )}
+          {allSectionKeys.length > 0 && (
+            <button
+              className="cm-link-btn"
+              onClick={() =>
+                allCollapsed
+                  ? setCollapsedSections(new Set())
+                  : setCollapsedSections(new Set(allSectionKeys))
+              }
+              style={{ fontSize: 12 }}
+              title={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
+            >
+              {allCollapsed ? 'Expand all' : 'Collapse all'}
             </button>
           )}
         </div>
@@ -334,26 +395,115 @@ export default function PeerComparisonTable({
               <th className="numeric-col">Top Decile</th>
               <th className="numeric-col">Bottom Decile</th>
               <th className="numeric-col">
-                {metrics.some(m => m.data_quality === 'custom_rank') ? 'Rank' : 'Percentile'}
+                {hasAnyCustomRank ? 'Rank' : 'Percentile'}
               </th>
               <th>Stars</th>
               <th className="chart-toggle-col" aria-label="Trend chart" />
             </tr>
           </thead>
           <tbody>
-            {metrics.map(m => {
-              const isTop    = m.percentile_rank != null && m.percentile_rank >= 90;
-              const isBottom = m.percentile_rank != null && m.percentile_rank < 10;
-              // Custom rank coloring: rank_pos===1 → best, rank_pos===n_total → worst
-              const nTotal        = m.peer_n != null ? m.peer_n + 1 : null;
-              const isCustomTop    = m.data_quality === 'custom_rank' && m.rank_pos === 1;
-              const isCustomBottom = m.data_quality === 'custom_rank' && nTotal != null && m.rank_pos === nTotal;
-              const rowTop    = isTop    || isCustomTop;
-              const rowBottom = isBottom || isCustomBottom;
+            {sections.map(s => {
+              const isCollapsed = collapsedSections.has(s.key);
+              return (
+                <React.Fragment key={s.key}>
+                  {/* ── Category section header ── */}
+                  <tr
+                    className="cat-section-header-row"
+                    onClick={() => toggleSection(s.key)}
+                    aria-expanded={!isCollapsed}
+                  >
+                    <td colSpan={COL_SPAN} className="cat-section-header-cell">
+                      <div className="cat-section-header-inner">
+                        <span className="cat-section-chevron" aria-hidden>
+                          {isCollapsed ? '▶' : '▼'}
+                        </span>
+                        <span className="cat-section-label">{s.label}</span>
+                        <span className="cat-section-count">{s.rows.length}</span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* ── Metric rows (hidden when collapsed) ── */}
+                  {!isCollapsed && s.rows.map(m => {
+                    const isTop    = m.percentile_rank != null && m.percentile_rank >= 90;
+                    const isBottom = m.percentile_rank != null && m.percentile_rank < 10;
+                    const nTotal        = m.peer_n != null ? m.peer_n + 1 : null;
+                    const isCustomTop    = m.data_quality === 'custom_rank' && m.rank_pos === 1;
+                    const isCustomBottom = m.data_quality === 'custom_rank' && nTotal != null && m.rank_pos === nTotal;
+                    const rowTop    = isTop    || isCustomTop;
+                    const rowBottom = isBottom || isCustomBottom;
+                    const chartOpen = expandedCharts.has(m.metric_name);
+                    return (
+                      <React.Fragment key={m.metric_name}>
+                        <tr className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}>
+                          <td className="metric-name-cell">
+                            <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
+                              {m.is_adverse ? '↓' : '↑'}
+                            </span>
+                            {m.metric_label}
+                          </td>
+                          <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
+                          <td className="numeric-col">{fmt(m.peer_median,       m.unit)}</td>
+                          <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
+                          <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
+                          <td className="numeric-col">
+                            {m.percentile_rank != null
+                              ? `${Math.round(m.percentile_rank)}th`
+                              : m.data_quality === 'custom_rank'
+                                ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
+                                    {m.rank_ordinal ?? '—'}
+                                  </span>
+                                : m.data_quality === 'insufficient_peer_data'
+                                  ? <span className="muted" title="Too few peer institutions for reliable scoring">
+                                      {`— (n=${m.peer_n ?? '?'})`}
+                                    </span>
+                                  : m.data_quality === 'zero_variance'
+                                    ? <span className="muted" title="All peers report identical values — percentile undefined">
+                                        {m.rank_ordinal ?? 'tied (all equal)'}
+                                      </span>
+                                    : '—'}
+                          </td>
+                          <td><Stars count={m.stars} /></td>
+                          <td className="chart-toggle-col">
+                            <button
+                              className={`chart-toggle-btn${chartOpen ? ' active' : ''}`}
+                              onClick={() => toggleChart(m.metric_name)}
+                              aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
+                              title={chartOpen ? 'Collapse chart' : 'View 3-year trend'}
+                            >
+                              {chartOpen ? <ChevronUp /> : <ChevronDown />}
+                            </button>
+                          </td>
+                        </tr>
+                        {chartOpen && (
+                          <tr className="metric-chart-row">
+                            <td colSpan={COL_SPAN} className="metric-chart-cell">
+                              <PeerBandChart
+                                metric={m.metric_name}
+                                charterNumber={charterNumber}
+                                period={period}
+                                peerGroup={peerGroup}
+                                customCharters={customCharters}
+                                nPeriods={12}
+                                token={token}
+                                unit={m.unit}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+
+            {/* Uncategorized metrics — should never appear; logged to console.warn above */}
+            {uncategorized.map(m => {
               const chartOpen = expandedCharts.has(m.metric_name);
               return (
                 <React.Fragment key={m.metric_name}>
-                  <tr className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}>
+                  <tr className="metric-row">
                     <td className="metric-name-cell">
                       <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
                         {m.is_adverse ? '↓' : '↑'}
@@ -365,21 +515,7 @@ export default function PeerComparisonTable({
                     <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
                     <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
                     <td className="numeric-col">
-                      {m.percentile_rank != null
-                        ? `${Math.round(m.percentile_rank)}th`
-                        : m.data_quality === 'custom_rank'
-                          ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
-                              {m.rank_ordinal ?? '—'}
-                            </span>
-                          : m.data_quality === 'insufficient_peer_data'
-                            ? <span className="muted" title="Too few peer institutions for reliable scoring">
-                                {`— (n=${m.peer_n ?? '?'})`}
-                              </span>
-                            : m.data_quality === 'zero_variance'
-                              ? <span className="muted" title="All peers report identical values — percentile undefined">
-                                  {m.rank_ordinal ?? 'tied (all equal)'}
-                                </span>
-                              : '—'}
+                      {m.percentile_rank != null ? `${Math.round(m.percentile_rank)}th` : '—'}
                     </td>
                     <td><Stars count={m.stars} /></td>
                     <td className="chart-toggle-col">
@@ -387,7 +523,6 @@ export default function PeerComparisonTable({
                         className={`chart-toggle-btn${chartOpen ? ' active' : ''}`}
                         onClick={() => toggleChart(m.metric_name)}
                         aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
-                        title={chartOpen ? 'Collapse chart' : 'View 3-year trend'}
                       >
                         {chartOpen ? <ChevronUp /> : <ChevronDown />}
                       </button>
@@ -395,7 +530,7 @@ export default function PeerComparisonTable({
                   </tr>
                   {chartOpen && (
                     <tr className="metric-chart-row">
-                      <td colSpan={8} className="metric-chart-cell">
+                      <td colSpan={COL_SPAN} className="metric-chart-cell">
                         <PeerBandChart
                           metric={m.metric_name}
                           charterNumber={charterNumber}
