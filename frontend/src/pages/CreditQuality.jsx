@@ -94,6 +94,28 @@ const PERIOD_OPTIONS = [
   { label: '5Y', nPeriods: 20 },
 ];
 
+// Metrics shown in the embedded peer table on this page.
+// Everything else (balance sheet, growth, earnings, loan-to-share) lives on
+// the dedicated Peer Comparison page only.
+const CQ_PEER_METRICS = new Set([
+  // Asset quality / delinquency
+  'delinq_rate_total',
+  'delinq_rate_90plus',
+  'chargeoff_rate_total_annualized',
+  'non_accrual_rate',
+  'tdr_to_loans',
+  'delinq_rate_cc',
+  'delinq_rate_auto',
+  'delinq_rate_1st_mortgage',
+  'delinq_rate_nonfarm_nonre',
+  'delinq_rate_commercial_re',
+  // Reserves / capital adequacy
+  'alll_coverage',
+  'alll_to_loans',
+  'net_worth_ratio',
+  'rbc_ratio',
+]);
+
 // Primary chips — the 4 KPI metrics (match KPI_DEFS order)
 const PRIMARY_VALUES = new Set(KPI_DEFS.map(d => d.metric));
 
@@ -763,7 +785,7 @@ export default function CreditQuality({ charterNumber, token }) {
         {/* ── Peer comparison table ── */}
         <div className="cq-card">
           <PeerComparisonTable
-            metrics={comparison?.metrics ?? []}
+            metrics={(comparison?.metrics ?? []).filter(m => CQ_PEER_METRICS.has(m.metric_name))}
             charterNumber={charterNumber}
             period={period}
             peerGroup={customCharters?.length ? 'CUSTOM' : peerGroup}
