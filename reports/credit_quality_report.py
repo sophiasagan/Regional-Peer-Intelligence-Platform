@@ -65,6 +65,15 @@ _B_GRAY  = "F5F5F5"
 
 _STARS = {1: "★☆☆☆☆", 2: "★★☆☆☆", 3: "★★★☆☆", 4: "★★★★☆", 5: "★★★★★"}
 
+CQ_SECTIONS = [
+    "Risk Executive Summary",
+    "Delinquency by Loan Type",
+    "Regional Comparison",
+    "Charge-off Trends",
+    "ALLL / ACL Adequacy",
+    "Recommendations",
+]
+
 # Loan-type delinquency: (display label, inst_rate_key, delinq_cols, balance_cols, peer_metric_key)
 # delinq_cols are named ORM columns (not JSONB codes) — all confirmed in db.py
 _LOAN_TYPE_CFG = [
@@ -849,34 +858,22 @@ def _add_regional_comparison(
         doc.add_paragraph(narrative)
 
 
-def _add_chargeoff_alll(
-    doc: Document,
-    data: dict,
-    prior_data: dict,
-    peer_label: str,
-) -> None:
-    _heading(doc, "Section 4 — Charge-Off and ALLL/ACL Coverage")
+def _add_chargeoff_section(doc: Document, data: dict, prior_data: dict, peer_label: str) -> None:
+    """Charge-off rates section — corresponds to 'Charge-off Trends' toggle label."""
+    _heading(doc, "Charge-off Trends")
 
-    inst     = data.get("institution_financials", {})
+    inst = data.get("institution_financials", {})
     composite = data.get("credit_risk_composite", {})
     co_metrics = composite.get("metrics", {}).get("chargeoff_rate_total_annualized", {})
-    cov_metrics = composite.get("metrics", {}).get("alll_coverage", {})
 
     gross_co   = inst.get("acct_550")
     recoveries = inst.get("acct_551")
     net_co     = (float(gross_co or 0) - float(recoveries or 0)) if gross_co is not None else None
     co_rate    = inst.get("chargeoff_rate_total_annualized")
-    allowance  = float(inst.get("acct_AS0048") or inst.get("acct_719") or 0) or None
-    coverage   = inst.get("alll_coverage")
-    allow_to_loans = inst.get("alll_to_loans")
+    co_peer_med = co_metrics.get("peer_distribution", {}).get("p50")
+    co_pctile   = co_metrics.get("percentile_rank")
+    co_stars    = co_metrics.get("stars")
 
-    co_peer_med  = co_metrics.get("peer_distribution", {}).get("p50")
-    cov_peer_med = cov_metrics.get("peer_distribution", {}).get("p50")
-    co_pctile    = co_metrics.get("percentile_rank")
-    co_stars     = co_metrics.get("stars")
-
-    # Charge-off table: current | prior quarter | prior year | peer median
-    _heading(doc, "Charge-Off Rates", level=2)
     co_table = doc.add_table(rows=1, cols=5)
     co_table.style = "Table Grid"
     for i, h in enumerate(["Metric", "Current", "Prior Quarter", "Prior Year", "Peer Median"]):
@@ -906,7 +903,6 @@ def _add_chargeoff_alll(
         row = co_table.add_row()
         for j, v in enumerate(vals):
             row.cells[j].text = str(v) if v is not None else "—"
-        # Color rate row
         if vals[0] == "Rate (Ann.)" and co_rate is not None and co_peer_med is not None:
             bg = _B_AMBER if co_rate > co_peer_med else _B_GREEN
             for c in row.cells[1:]:
@@ -914,10 +910,20 @@ def _add_chargeoff_alll(
 
     doc.add_paragraph()
 
-    # ALLL / ACL adequacy
-    _heading(doc, "Allowance Adequacy (ACL / ALLL)", level=2)
 
-    # Red callout if coverage < 1.0x
+def _add_alll_section(doc: Document, data: dict, prior_data: dict, peer_label: str) -> None:
+    """ALLL/ACL adequacy section — corresponds to 'ALLL / ACL Adequacy' toggle label."""
+    _heading(doc, "ALLL / ACL Adequacy")
+
+    inst = data.get("institution_financials", {})
+    composite = data.get("credit_risk_composite", {})
+    cov_metrics = composite.get("metrics", {}).get("alll_coverage", {})
+
+    allowance      = float(inst.get("acct_AS0048") or inst.get("acct_719") or 0) or None
+    coverage       = inst.get("alll_coverage")
+    allow_to_loans = inst.get("alll_to_loans")
+    cov_peer_med   = cov_metrics.get("peer_distribution", {}).get("p50")
+
     if coverage is not None and coverage < 1.0:
         _red_callout(
             doc,
@@ -944,7 +950,7 @@ def _add_chargeoff_alll(
         (
             "Allowance / Loans",
             allow_to_loans and _fmt_pct(allow_to_loans, 3),
-            None, None, None
+            None, None, None,
         ),
         (
             "Peer Percentile",
@@ -958,13 +964,23 @@ def _add_chargeoff_alll(
         row = alll_table.add_row()
         for j, v in enumerate(vals):
             row.cells[j].text = str(v) if v is not None else "—"
-        # Color coverage row: adverse = low coverage is bad
         if vals[0] == "Coverage Ratio" and coverage is not None:
             if coverage < 1.0:
                 for c in row.cells[1:2]:
                     _cell_bg(c, _B_RED)
             elif cov_peer_med and coverage < cov_peer_med:
                 _cell_bg(row.cells[1], _B_AMBER)
+
+
+def _add_chargeoff_alll(
+    doc: Document,
+    data: dict,
+    prior_data: dict,
+    peer_label: str,
+) -> None:
+    """Combined charge-off + ALLL section — preserved for backward compatibility."""
+    _add_chargeoff_section(doc, data, prior_data, peer_label)
+    _add_alll_section(doc, data, prior_data, peer_label)
 
 
 def _add_watch_items(doc: Document, watch_text: str) -> None:
@@ -1059,11 +1075,13 @@ def build_report(
     data: Optional[dict] = None,
     db_url: Optional[str] = None,
     board_version: bool = False,
+    included_sections: Optional[list] = None,
 ) -> Path:
     """Generate credit quality risk committee memo; return path to .docx file.
 
     Called by api/routers/reports.py after _gather_data() populates `data`.
     board_version=True adds trend chart, forward outlook, and peer appendix.
+    included_sections=None means all sections; otherwise only the named ones.
     """
     data    = data or {}
     db_url  = db_url or DB_URL
@@ -1120,17 +1138,34 @@ def build_report(
     doc.styles["Normal"].font.name = "Calibri"
     doc.styles["Normal"].font.size = Pt(10)
 
+    def _inc(label: str) -> bool:
+        return included_sections is None or label in included_sections
+
     report_type = "board" if board_version else "risk_committee"
     _add_memo_header(doc, institution_name, period, peer_group_label, report_type)
-    _add_exec_summary(doc, exec_summary)
-    doc.add_page_break()
-    _add_delinq_trend_table(doc, trend_data, peer_group_label, chart_bytes if board_version else None)
-    doc.add_page_break()
-    _add_regional_comparison(doc, regional_data, institution_name, current_delinq, regional_narr)
-    doc.add_page_break()
-    _add_chargeoff_alll(doc, data, prior_data, peer_group_label)
-    doc.add_page_break()
-    _add_watch_items(doc, watch_text)
+
+    sections_to_render: list = []
+    if _inc("Risk Executive Summary"):
+        sections_to_render.append(lambda: _add_exec_summary(doc, exec_summary))
+    if _inc("Delinquency by Loan Type"):
+        sections_to_render.append(lambda: _add_delinq_trend_table(
+            doc, trend_data, peer_group_label, chart_bytes if board_version else None
+        ))
+    if _inc("Regional Comparison"):
+        sections_to_render.append(lambda: _add_regional_comparison(
+            doc, regional_data, institution_name, current_delinq, regional_narr
+        ))
+    if _inc("Charge-off Trends"):
+        sections_to_render.append(lambda: _add_chargeoff_section(doc, data, prior_data, peer_group_label))
+    if _inc("ALLL / ACL Adequacy"):
+        sections_to_render.append(lambda: _add_alll_section(doc, data, prior_data, peer_group_label))
+    if _inc("Recommendations"):
+        sections_to_render.append(lambda: _add_watch_items(doc, watch_text))
+
+    for i, render_fn in enumerate(sections_to_render):
+        if i > 0:
+            doc.add_page_break()
+        render_fn()
 
     if board_version:
         doc.add_page_break()

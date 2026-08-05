@@ -38,11 +38,10 @@ const REPORT_DEFS = [
     sections:       [
       'Executive Summary',
       'Market Position & Deposit Share',
-      'Peer Comparison',
-      'Credit Quality Overview',
       'Competitor Movements',
-      'Early Warning Signals',
-      'Growth Metrics',
+      'Credit Quality Overview',
+      'Market Opportunities',
+      'Data Notes',
     ],
     estimatedPages: 12,
     color:          '#1565C0',
@@ -56,10 +55,9 @@ const REPORT_DEFS = [
     sections:       [
       'Risk Executive Summary',
       'Delinquency by Loan Type',
+      'Regional Comparison',
       'Charge-off Trends',
       'ALLL / ACL Adequacy',
-      'Early Warning Signals',
-      '90+ Day Bucket Detail',
       'Recommendations',
     ],
     estimatedPages: 8,
@@ -70,16 +68,16 @@ const REPORT_DEFS = [
 
 // Sections with no matching live component yet — honest "not available" placeholder
 const PREVIEW_NOT_AVAILABLE = new Set([
-  'Executive Summary', 'Risk Executive Summary', 'Competitor Movements', 'Recommendations',
+  'Executive Summary', 'Risk Executive Summary',
+  'Competitor Movements', 'Recommendations',
+  'Market Opportunities', 'Data Notes', 'Regional Comparison',
 ]);
 
 // Map section name → PeerBandChart metric key
 const SECTION_CHART_METRIC = {
-  'Growth Metrics':           'asset_growth_rate',
   'Delinquency by Loan Type': 'delinq_rate_total',
   'Charge-off Trends':        'chargeoff_rate_total_annualized',
   'ALLL / ACL Adequacy':      'alll_coverage',
-  '90+ Day Bucket Detail':    'delinq_rate_90plus',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -153,15 +151,14 @@ const SECTION_ICONS = {
   'Executive Summary':              '📌',
   'Risk Executive Summary':         '📌',
   'Market Position & Deposit Share':'🗺',
-  'Peer Comparison':                '⚖️',
   'Credit Quality Overview':        '📈',
   'Competitor Movements':           '🏦',
-  'Early Warning Signals':          '🚨',
-  'Growth Metrics':                 '📊',
+  'Market Opportunities':           '🎯',
+  'Data Notes':                     '📋',
   'Delinquency by Loan Type':       '⚠️',
+  'Regional Comparison':            '🗺',
   'Charge-off Trends':              '📉',
   'ALLL / ACL Adequacy':            '🛡️',
-  '90+ Day Bucket Detail':          '🔍',
   'Recommendations':                '💡',
 };
 
@@ -216,21 +213,6 @@ function SectionContent({ section, metrics, charterNumber, period, peerGroup, pe
     );
   }
 
-  // Peer Comparison — full metric table, same data as Peer Comparison page
-  if (section === 'Peer Comparison') {
-    return (
-      <PeerComparisonTable
-        metrics={metrics}
-        charterNumber={charterNumber}
-        period={period}
-        peerGroup={peerGroup}
-        peerGroupLabel={peerGroupLabel}
-        peerCount={peerCount}
-        token={token}
-      />
-    );
-  }
-
   // Credit Quality Overview — asset quality + capital adequacy only (same scope as CreditQuality page)
   if (section === 'Credit Quality Overview') {
     const cqMetrics = metrics.filter(m => CQ_PEER_METRIC_KEYS.has(m.metric_name));
@@ -244,20 +226,6 @@ function SectionContent({ section, metrics, charterNumber, period, peerGroup, pe
         peerCount={peerCount}
         token={token}
       />
-    );
-  }
-
-  // Early Warning Signals — self-fetching EarlyWarningPanel (non-managed = collapsible)
-  if (section === 'Early Warning Signals') {
-    return (
-      <div className="rp-section-ew">
-        <EarlyWarningPanel
-          charterNumber={charterNumber}
-          period={period}
-          peerGroup={peerGroup}
-          token={token}
-        />
-      </div>
     );
   }
 
@@ -346,7 +314,7 @@ function PreviewPanel({
 
           {/* Table of contents with section toggles */}
           <div className="rp-preview-section">
-            <div className="rp-preview-section-title">Table of Contents — toggle sections to include in preview</div>
+            <div className="rp-preview-section-title">Table of Contents — uncheck sections to exclude from preview and generated document</div>
             <div className="rp-toc">
               {report.sections.map((s, i) => {
                 const on = isEnabled(enabledSections, s);
@@ -451,15 +419,18 @@ function PreviewPanel({
         <div className="rp-preview-footer">
           <div className="rp-footer-left">
             <span className="rp-preview-format-note">Output: Word document (.docx), ready for board distribution</span>
-            <span className="rp-generate-note">
-              The generated document currently includes all standard sections regardless of your preview selection above — customizable export coming soon.
-            </span>
+            {activeSections.length === 0 && (
+              <span className="rp-generate-note" style={{ color: '#991B1B' }}>
+                Select at least one section before generating.
+              </span>
+            )}
           </div>
           <button
             className="rp-generate-btn rp-generate-btn--primary"
             style={{ background: report.color }}
             onClick={() => onGenerate(report)}
-            disabled={!!generating}
+            disabled={!!generating || activeSections.length === 0}
+            title={activeSections.length === 0 ? 'Select at least one section to generate' : undefined}
           >
             {generating === report.id
               ? <><span className="rp-spinner" /> Generating…</>
@@ -477,6 +448,7 @@ function PreviewPanel({
 
 function ReportCard({ report, onPreview, onGenerate, generating, lastReport, enabledSections, onToggleSection }) {
   const done = lastReport?.report_type === report.id;
+  const activeCount = report.sections.filter(s => isEnabled(enabledSections, s)).length;
   return (
     <div className={`rp-card ${done ? 'rp-card--done' : ''}`}>
 
@@ -491,7 +463,7 @@ function ReportCard({ report, onPreview, onGenerate, generating, lastReport, ena
       <div className="rp-card-body">
         <div className="rp-card-sections-label">
           Includes
-          <span className="rp-card-toggle-hint"> — check/uncheck to include in preview</span>
+          <span className="rp-card-toggle-hint"> — uncheck to exclude from generated document</span>
         </div>
         <ul className="rp-card-sections">
           {report.sections.map(s => {
@@ -544,7 +516,8 @@ function ReportCard({ report, onPreview, onGenerate, generating, lastReport, ena
             className="rp-generate-btn rp-generate-btn--primary"
             style={{ background: report.color }}
             onClick={() => onGenerate(report)}
-            disabled={!!generating}
+            disabled={!!generating || activeCount === 0}
+            title={activeCount === 0 ? 'Select at least one section to generate' : undefined}
           >
             {generating === report.id
               ? <><span className="rp-spinner" /> Generating…</>
@@ -580,11 +553,19 @@ export default function Reports({ charterNumber, token }) {
   }
 
   async function handleGenerate(report) {
+    const enabledSet = sectionToggles[report.id] ?? null;
+    const activeSections = report.sections.filter(s => isEnabled(enabledSet, s));
+    if (activeSections.length === 0) return;
+
     setGenerating(report.id);
     setError(null);
     try {
+      const params = new URLSearchParams({ period, peer_group: peerGroup });
+      if (enabledSet !== null && activeSections.length < report.sections.length) {
+        params.set('included_sections', activeSections.join(','));
+      }
       const res = await fetch(
-        `${API}${report.endpoint(charterNumber)}?period=${period}&peer_group=${peerGroup}`,
+        `${API}${report.endpoint(charterNumber)}?${params}`,
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

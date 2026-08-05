@@ -82,16 +82,25 @@ async def generate_quarterly_report(
     charter_number: int,
     period: str = Query(...),
     peer_group: str = Query(default="REGIONAL"),
+    included_sections: str | None = Query(default=None),
 ):
     """Generate the quarterly competitive intelligence board report."""
     from reports.quarterly_template import build_report
     tenant_id = request.state.tenant_id
     require_entitlement(tenant_id, charter_number)
 
+    sections_list = (
+        [s.strip() for s in included_sections.split(",") if s.strip()]
+        if included_sections else None
+    )
+
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     report_id = str(uuid.uuid4())
     data = _gather_data(charter_number, period, peer_group, tenant_id)
-    output_path = build_report(charter_number, period, peer_group, str(REPORTS_DIR), data, db_url=DB_URL)
+    output_path = build_report(
+        charter_number, period, peer_group, str(REPORTS_DIR), data,
+        db_url=DB_URL, included_sections=sections_list,
+    )
 
     return ReportMetadata(
         report_id=report_id,
@@ -110,16 +119,25 @@ async def generate_credit_quality_report(
     charter_number: int,
     period: str = Query(...),
     peer_group: str = Query(default="REGIONAL"),
+    included_sections: str | None = Query(default=None),
 ):
     """Generate the risk committee memo + board credit quality section."""
     from reports.credit_quality_report import build_report
     tenant_id = request.state.tenant_id
     require_entitlement(tenant_id, charter_number)
 
+    sections_list = (
+        [s.strip() for s in included_sections.split(",") if s.strip()]
+        if included_sections else None
+    )
+
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     report_id = str(uuid.uuid4())
     data = _gather_data(charter_number, period, peer_group, tenant_id)
-    output_path = build_report(charter_number, period, peer_group, str(REPORTS_DIR), data, db_url=DB_URL)
+    output_path = build_report(
+        charter_number, period, peer_group, str(REPORTS_DIR), data,
+        db_url=DB_URL, included_sections=sections_list,
+    )
 
     return ReportMetadata(
         report_id=report_id,

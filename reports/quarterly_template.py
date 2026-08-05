@@ -682,6 +682,21 @@ def _add_data_notes(
     p.runs[-1].font.size = Pt(9)
 
 
+# ── Section label constants ───────────────────────────────────────────────────
+# These strings are the canonical section identifiers for the included_sections
+# parameter. They MUST match the section names in REPORT_DEFS inside
+# frontend/src/pages/Reports.jsx exactly — any mismatch silently drops a section.
+
+QUARTERLY_SECTIONS = [
+    "Executive Summary",
+    "Market Position & Deposit Share",
+    "Competitor Movements",
+    "Credit Quality Overview",
+    "Market Opportunities",
+    "Data Notes",
+]
+
+
 # ── Main build function ───────────────────────────────────────────────────────
 
 def build_report(
@@ -691,10 +706,15 @@ def build_report(
     output_dir: str,
     data: Optional[dict] = None,
     db_url: Optional[str] = None,
+    included_sections: Optional[list[str]] = None,
 ) -> Path:
     """Generate quarterly board report; return path to written .docx file.
 
     Called by api/routers/reports.py after _gather_data() populates `data`.
+
+    included_sections: when provided, only those section labels are written to
+    the document. None (default) includes all sections — fully backward-compatible.
+    Section labels must match QUARTERLY_SECTIONS exactly.
     """
     data    = data or {}
     db_url  = db_url or DB_URL
@@ -709,12 +729,16 @@ def build_report(
     peer_group_label   = data.get("peer_group_label", peer_group)
     tenant_id          = data.get("tenant_id", "")
 
+    def _inc(label: str) -> bool:
+        """True when this section should be written to the document."""
+        return included_sections is None or label in included_sections
+
     # ── Gather market share dashboard data ─────────────────────────────────────
     dashboard_rows = _build_market_dashboard_data(
         charter_number, period, tenant_id, institution_state, db_url
     )
 
-    # ── Claude narrative generation (all at once to parallelize I/O if needed) ─
+    # ── Claude narrative generation ────────────────────────────────────────────
     exec_summary = _generate_executive_summary(
         institution_name, period, peer_group_label, dashboard_rows, inst, composite
     )
@@ -730,23 +754,45 @@ def build_report(
 
     # ── Build document ─────────────────────────────────────────────────────────
     doc = Document()
-
-    # Set default font
     doc.styles["Normal"].font.name = "Calibri"
     doc.styles["Normal"].font.size = Pt(10)
 
+    # Cover page is always included (not a toggleable section)
     _add_cover_page(doc, institution_name, period, peer_group_label)
-    _add_executive_summary(doc, exec_summary)
-    doc.add_page_break()
-    _add_market_share_dashboard(doc, dashboard_rows, period)
-    doc.add_page_break()
-    _add_competitive_movements(doc, dashboard_rows, comp_narratives)
-    doc.add_page_break()
-    _add_credit_quality_section(doc, data, peer_group_label)
-    doc.add_page_break()
-    _add_market_opportunities(doc, opportunities)
-    doc.add_page_break()
-    _add_data_notes(doc, dashboard_rows, period, peer_group_label)
+
+    # Build ordered list of sections to render so page breaks only appear
+    # between sections that are actually included — no orphan blank pages.
+    sections_to_render: list = []
+
+    if _inc("Executive Summary"):
+        sections_to_render.append(
+            lambda: _add_executive_summary(doc, exec_summary)
+        )
+    if _inc("Market Position & Deposit Share"):
+        sections_to_render.append(
+            lambda: _add_market_share_dashboard(doc, dashboard_rows, period)
+        )
+    if _inc("Competitor Movements"):
+        sections_to_render.append(
+            lambda: _add_competitive_movements(doc, dashboard_rows, comp_narratives)
+        )
+    if _inc("Credit Quality Overview"):
+        sections_to_render.append(
+            lambda: _add_credit_quality_section(doc, data, peer_group_label)
+        )
+    if _inc("Market Opportunities"):
+        sections_to_render.append(
+            lambda: _add_market_opportunities(doc, opportunities)
+        )
+    if _inc("Data Notes"):
+        sections_to_render.append(
+            lambda: _add_data_notes(doc, dashboard_rows, period, peer_group_label)
+        )
+
+    for i, render_fn in enumerate(sections_to_render):
+        if i > 0:
+            doc.add_page_break()
+        render_fn()
 
     filename = f"quarterly_{charter_number}_{period}_{peer_group}.docx"
     output_path = Path(output_dir) / filename
