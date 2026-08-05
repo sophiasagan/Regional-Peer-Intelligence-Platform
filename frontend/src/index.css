@@ -517,6 +517,18 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .metric-chart-row td  { padding: 0 !important; border-top: none; border-bottom: 2px solid #E8EAF6; }
 .metric-chart-cell    { background: #F8F9FF; padding: 0 !important; }
 
+/* ── Named-column (CUSTOM peer group) view ── */
+.peer-table-scroll            { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Cap warnings — shown above the table when peer count is large */
+.peer-cap-warning             { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; border-bottom: 1px solid var(--border); }
+.peer-cap-warning--soft       { background: #FFFBEB; color: #92400E; }
+.peer-cap-warning--hard       { background: #FEF2F2; color: #991B1B; }
+.peer-cap-dismiss             { margin-left: auto; font-size: 12px; color: inherit; text-decoration: underline; }
+/* Min column width so named-peer columns don't collapse to nothing on narrow viewports */
+.peer-comparison-table        { min-width: 600px; }
+.named-peer-col-header        { min-width: 110px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.named-peer-col               { text-align: right !important; font-variant-numeric: tabular-nums; }
+
 /* ── Metric library (nav — hidden when not rendered) ── */
 .metric-library      { width: 210px; flex-shrink: 0; border-right: 1px solid var(--border); background: #fff; overflow-y: auto; }
 .library-header      { padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--bg-gray); }

@@ -238,7 +238,10 @@ def _load_peer_values(metric: str, peer_charters: list[int], period: str, db_url
         return pd.Series(dtype=float)
 
     df = compute_ratios(df)
-    return df[metric].dropna() if metric in df.columns else pd.Series(dtype=float)
+    if metric not in df.columns:
+        return pd.Series(dtype=float)
+    # Index by charter_number so callers can build per-institution value maps
+    return df.set_index("charter_number")[metric].dropna()
 
 
 def compute_peer_distribution(
@@ -247,10 +250,13 @@ def compute_peer_distribution(
     period: str,
     db_url: str | None = None,
     prior_period: str | None = None,
+    include_values: bool = False,
 ) -> dict:
     """Return percentile distribution for a metric across the peer group.
 
     For growth metrics, prior_period must be provided (defaults to same-Q prior year).
+    When include_values=True, also returns "values": {charter_number: value} using
+    the data already loaded for the quantile computation — no second DB round-trip.
     """
     if metric in GROWTH_METRICS:
         pp = prior_period or _prior_year_period(period)
@@ -259,9 +265,12 @@ def compute_peer_distribution(
         values = _load_peer_values(metric, peer_charters, period, db_url)
 
     if values.empty:
-        return {"n": 0, "p10": None, "p25": None, "p50": None, "p75": None, "p90": None}
+        result: dict = {"n": 0, "p10": None, "p25": None, "p50": None, "p75": None, "p90": None}
+        if include_values:
+            result["values"] = {}
+        return result
 
-    return {
+    result = {
         "n": len(values),
         "p10": float(values.quantile(0.10)),
         "p25": float(values.quantile(0.25)),
@@ -269,6 +278,10 @@ def compute_peer_distribution(
         "p75": float(values.quantile(0.75)),
         "p90": float(values.quantile(0.90)),
     }
+    if include_values:
+        # Both _load_peer_values and _load_peer_growth_values index by charter_number
+        result["values"] = {int(k): float(v) for k, v in values.items()}
+    return result
 
 
 # YoY growth metrics — (account_code, display_label)

@@ -116,6 +116,13 @@ def _ordinal(rank: int, n_total: int) -> str:
     return label
 
 
+class PeerValue(BaseModel):
+    """One named peer's value for a single metric — used in CUSTOM named-column view."""
+    charter_number: int
+    institution_name: str
+    value: Optional[float] = None
+
+
 class MetricRow(BaseModel):
     metric_name: str
     metric_label: str
@@ -131,6 +138,7 @@ class MetricRow(BaseModel):
     data_quality: Optional[str] = None  # "insufficient_peer_data" | "zero_variance" | "custom_rank"
     rank_ordinal: Optional[str] = None  # e.g. "2nd of 4 (best)" — set for CUSTOM small groups
     rank_pos: Optional[int] = None      # numeric rank position (1 = best) — used for row color
+    peer_values: Optional[list[PeerValue]] = None  # set only for CUSTOM groups — named column view
 
 
 class PeerComparisonResponse(BaseModel):
@@ -315,6 +323,26 @@ async def get_peer_list(
     }
 
 
+def _resolve_peer_names(charter_numbers: list[int], period: str, engine) -> dict[int, str]:
+    """Return {charter_number: institution_name} for the given charters.
+
+    Uses the same query pattern as get_peer_list so there is no separate lookup code path.
+    """
+    if not charter_numbers:
+        return {}
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT DISTINCT ON (charter_number) charter_number, institution_name
+                FROM institutions_quarterly
+                WHERE charter_number = ANY(:charters) AND period = :period
+                ORDER BY charter_number
+            """),
+            {"charters": charter_numbers, "period": period},
+        ).fetchall()
+    return {int(r[0]): (r[1] or f"Charter {r[0]}") for r in rows}
+
+
 @router.get("/{charter_number}", response_model=PeerComparisonResponse)
 async def get_peer_comparison(
     request: Request,
@@ -375,6 +403,10 @@ async def get_peer_comparison(
         peer_charters = build_peer_group(charter_number, period, group_type, tenant_id, custom_group_name, DB_URL)
         label = peer_group_label(group_type, charter_number, period, DB_URL)
 
+    # Resolve institution names for custom peer groups — used for named-column display.
+    # Single lightweight query; reuses the same SELECT pattern as get_peer_list.
+    peer_name_map: dict[int, str] = _resolve_peer_names(peer_charters, period, engine) if is_custom else {}
+
     # Pre-fetch peer institution rows for small CUSTOM groups.
     # These are used to compute exact ordinal ranks instead of suppressing with "— (n=4)".
     # Only executed when custom_charters is set and the group is below the MIN_PEER_N threshold.
@@ -395,8 +427,24 @@ async def get_peer_comparison(
     metric_rows = []
     for metric, (metric_label, unit) in METRIC_LABELS.items():
         inst_val = inst_row.get(metric)
-        dist     = compute_peer_distribution(metric, peer_charters, period, DB_URL, prior_period=prior_period)
+        dist     = compute_peer_distribution(
+            metric, peer_charters, period, DB_URL,
+            prior_period=prior_period, include_values=is_custom,
+        )
         n        = dist["n"]
+
+        # Build ordered per-peer value list for named-column display (CUSTOM only)
+        peer_vals_list: Optional[list[PeerValue]] = None
+        if is_custom:
+            raw_vals = dist.get("values", {})
+            peer_vals_list = [
+                PeerValue(
+                    charter_number=c,
+                    institution_name=peer_name_map.get(c, f"Charter {c}"),
+                    value=raw_vals.get(c),
+                )
+                for c in peer_charters
+            ]
 
         # Resolve institution value to a clean float (None if missing / NaN)
         inst_float: Optional[float] = None
@@ -418,6 +466,7 @@ async def get_peer_comparison(
             is_adverse=metric in ADVERSE_METRICS,
             unit=unit,
             peer_n=n if n > 0 else None,
+            peer_values=peer_vals_list,  # None for non-custom; list[PeerValue] for CUSTOM
         )
 
         if n == 0 or inst_float is None:

@@ -8,6 +8,12 @@
  * Stars: 1–5 on every row (Callahan scale).
  * Download: full table as CSV — non-negotiable (P76 / Callahan rule).
  * Categories: metrics are grouped into collapsible sections (all expanded by default).
+ *
+ * Named-column mode (CUSTOM peer groups only):
+ *   When metric rows carry peer_values, the Peer Median / Top Decile / Bottom Decile
+ *   columns are replaced by one column per selected institution showing that
+ *   institution's actual value. Rank and Stars columns are unchanged.
+ *   The table wrapper becomes horizontally scrollable for large custom selections.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -47,22 +53,52 @@ function fmtAssets(v) {
   return `$${v.toLocaleString()}`;
 }
 
+// Truncate long institution names in column headers so narrow named columns stay readable.
+function shortName(name, max = 18) {
+  if (!name || name.length <= max) return name;
+  return name.slice(0, max - 1) + '…';
+}
+
 // Export all metrics regardless of collapse state; adds Category column.
-function downloadCsv(metrics, charterNumber, period, peerGroupLabel) {
+// In named-column mode: replaces aggregate peer columns with one column per named institution.
+function downloadCsv(metrics, charterNumber, period, peerGroupLabel, namedPeers) {
   if (!metrics?.length) return;
-  const meta    = `Peer Group: ${peerGroupLabel},Charter: ${charterNumber},Period: ${period}`;
-  const headers = 'Category,Metric,Your Value,Peer Median,Top Decile (90th),Bottom Decile (10th),Percentile,Stars,Adverse';
-  const rows    = metrics.map(m => [
-    `"${METRIC_TO_CATEGORY[m.metric_name] ?? ''}"`,
-    `"${m.metric_label}"`,
-    m.institution_value ?? '',
-    m.peer_median        ?? '',
-    m.peer_p90           ?? '',
-    m.peer_p10           ?? '',
-    m.percentile_rank != null ? m.percentile_rank.toFixed(1) : '',
-    m.stars              ?? '',
-    m.is_adverse ? 'Y' : 'N',
-  ].join(','));
+  const meta = `Peer Group: ${peerGroupLabel},Charter: ${charterNumber},Period: ${period}`;
+
+  let headers, rows;
+  if (namedPeers.length > 0) {
+    const peerCols = namedPeers.map(p => `"${p.institution_name}"`).join(',');
+    headers = `Category,Metric,Your Value,${peerCols},Rank,Stars,Adverse`;
+    rows = metrics.map(m => {
+      const peerValsMap = Object.fromEntries(
+        (m.peer_values ?? []).map(pv => [pv.charter_number, pv.value])
+      );
+      const peerCells = namedPeers.map(p => peerValsMap[p.charter_number] ?? '').join(',');
+      return [
+        `"${METRIC_TO_CATEGORY[m.metric_name] ?? ''}"`,
+        `"${m.metric_label}"`,
+        m.institution_value ?? '',
+        peerCells,
+        m.rank_ordinal ?? (m.percentile_rank != null ? `${m.percentile_rank.toFixed(1)}th` : ''),
+        m.stars ?? '',
+        m.is_adverse ? 'Y' : 'N',
+      ].join(',');
+    });
+  } else {
+    headers = 'Category,Metric,Your Value,Peer Median,Top Decile (90th),Bottom Decile (10th),Percentile,Stars,Adverse';
+    rows = metrics.map(m => [
+      `"${METRIC_TO_CATEGORY[m.metric_name] ?? ''}"`,
+      `"${m.metric_label}"`,
+      m.institution_value ?? '',
+      m.peer_median        ?? '',
+      m.peer_p90           ?? '',
+      m.peer_p10           ?? '',
+      m.percentile_rank != null ? m.percentile_rank.toFixed(1) : '',
+      m.stars              ?? '',
+      m.is_adverse ? 'Y' : 'N',
+    ].join(','));
+  }
+
   const blob = new Blob([[meta, '', headers, ...rows].join('\n')], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -294,9 +330,23 @@ export default function PeerComparisonTable({
     });
   }
 
+  // ── Named-column mode detection ─────────────────────────────────────────────
+  // When the API returns peer_values on metric rows (CUSTOM group only), switch
+  // from aggregate columns (median/p10/p90) to one column per named institution.
+  const firstMetric = metrics[0];
+  const isNamedMode = Boolean(firstMetric?.peer_values);
+  // Ordered list of named peers — taken from any metric that has values.
+  // All metrics share the same peer list, so the first non-null one suffices.
+  const namedPeers = isNamedMode
+    ? (metrics.find(m => m.peer_values?.length > 0)?.peer_values ?? [])
+    : [];
+
+  // Dynamic column count: Metric + Your Value + [peer cols or 3 agg cols] + Rank + Stars + Trend
+  const COL_SPAN = isNamedMode ? 4 + namedPeers.length : 8;
+
   const handleDownload = useCallback(
-    () => downloadCsv(metrics, charterNumber, period, peerGroupLabel),
-    [metrics, charterNumber, period, peerGroupLabel],
+    () => downloadCsv(metrics, charterNumber, period, peerGroupLabel, namedPeers),
+    [metrics, charterNumber, period, peerGroupLabel, namedPeers],
   );
 
   function handleApply(selected) {
@@ -322,10 +372,100 @@ export default function PeerComparisonTable({
     );
   }
 
-  // Column count — keep in sync with thead
-  const COL_SPAN = 8;
-
   const hasAnyCustomRank = metrics.some(m => m.data_quality === 'custom_rank');
+
+  // ── Row renderer (shared between sections and uncategorized fallback) ───────
+  function renderMetricRow(m) {
+    const isTop    = m.percentile_rank != null && m.percentile_rank >= 90;
+    const isBottom = m.percentile_rank != null && m.percentile_rank < 10;
+    const nTotal        = m.peer_n != null ? m.peer_n + 1 : null;
+    const isCustomTop    = m.data_quality === 'custom_rank' && m.rank_pos === 1;
+    const isCustomBottom = m.data_quality === 'custom_rank' && nTotal != null && m.rank_pos === nTotal;
+    const rowTop    = isTop    || isCustomTop;
+    const rowBottom = isBottom || isCustomBottom;
+    const chartOpen = expandedCharts.has(m.metric_name);
+
+    // Per-institution value lookup for named mode
+    const peerValMap = isNamedMode
+      ? Object.fromEntries((m.peer_values ?? []).map(pv => [pv.charter_number, pv.value]))
+      : null;
+
+    return (
+      <React.Fragment key={m.metric_name}>
+        <tr className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}>
+          <td className="metric-name-cell">
+            <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
+              {m.is_adverse ? '↓' : '↑'}
+            </span>
+            {m.metric_label}
+          </td>
+          <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
+
+          {isNamedMode ? (
+            /* Named-column mode: one cell per selected institution */
+            namedPeers.map(p => (
+              <td key={p.charter_number} className="numeric-col named-peer-col">
+                {fmt(peerValMap?.[p.charter_number] ?? null, m.unit)}
+              </td>
+            ))
+          ) : (
+            /* Aggregate mode: median / top decile / bottom decile */
+            <>
+              <td className="numeric-col">{fmt(m.peer_median, m.unit)}</td>
+              <td className="numeric-col">{fmt(m.peer_p90,    m.unit)}</td>
+              <td className="numeric-col">{fmt(m.peer_p10,    m.unit)}</td>
+            </>
+          )}
+
+          <td className="numeric-col">
+            {m.percentile_rank != null
+              ? `${Math.round(m.percentile_rank)}th`
+              : m.data_quality === 'custom_rank'
+                ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
+                    {m.rank_ordinal ?? '—'}
+                  </span>
+                : m.data_quality === 'insufficient_peer_data'
+                  ? <span className="muted" title="Too few peer institutions for reliable scoring">
+                      {`— (n=${m.peer_n ?? '?'})`}
+                    </span>
+                  : m.data_quality === 'zero_variance'
+                    ? <span className="muted" title="All peers report identical values — percentile undefined">
+                        {m.rank_ordinal ?? 'tied (all equal)'}
+                      </span>
+                    : '—'}
+          </td>
+          <td><Stars count={m.stars} /></td>
+          <td className="chart-toggle-col">
+            <button
+              className={`chart-toggle-btn${chartOpen ? ' active' : ''}`}
+              onClick={() => toggleChart(m.metric_name)}
+              aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
+              title={chartOpen ? 'Collapse chart' : 'View 3-year trend'}
+            >
+              <span className="chart-toggle-label">{chartOpen ? 'Close' : 'Trend'}</span>
+              {chartOpen ? <ChevronUp /> : <ChevronDown />}
+            </button>
+          </td>
+        </tr>
+        {chartOpen && (
+          <tr className="metric-chart-row">
+            <td colSpan={COL_SPAN} className="metric-chart-cell">
+              <PeerBandChart
+                metric={m.metric_name}
+                charterNumber={charterNumber}
+                period={period}
+                peerGroup={peerGroup}
+                customCharters={customCharters}
+                nPeriods={12}
+                token={token}
+                unit={m.unit}
+              />
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  }
 
   return (
     <div className="peer-comparison-table-wrapper">
@@ -383,173 +523,92 @@ export default function PeerComparisonTable({
         />
       )}
 
+      {isNamedMode && namedPeers.length > 10 && (
+        <div className="peer-cap-warning peer-cap-warning--hard" role="alert">
+          <strong>Too many peers selected ({namedPeers.length}).</strong>{' '}
+          Side-by-side comparison works best with 10 or fewer institutions — columns are too narrow to read at this width.
+          <button className="cm-link-btn peer-cap-dismiss" onClick={() => setShowPanel(true)}>
+            Trim selection
+          </button>
+        </div>
+      )}
+      {isNamedMode && namedPeers.length > 7 && namedPeers.length <= 10 && (
+        <div className="peer-cap-warning peer-cap-warning--soft" role="status">
+          {namedPeers.length} institutions selected — scroll right to see all columns.
+        </div>
+      )}
+
       {metrics.length === 0 ? (
         <p className="table-empty">No comparison data available.</p>
       ) : (
-        <table className="peer-comparison-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th className="numeric-col">Your Value</th>
-              <th className="numeric-col">Peer Median</th>
-              <th className="numeric-col">Top Decile</th>
-              <th className="numeric-col">Bottom Decile</th>
-              <th className="numeric-col">
-                {hasAnyCustomRank ? 'Rank' : 'Percentile'}
-              </th>
-              <th>Stars</th>
-              <th className="chart-toggle-col">Trend</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sections.map(s => {
-              const isCollapsed = collapsedSections.has(s.key);
-              return (
-                <React.Fragment key={s.key}>
-                  {/* ── Category section header ── */}
-                  <tr
-                    className="cat-section-header-row"
-                    onClick={() => toggleSection(s.key)}
-                    aria-expanded={!isCollapsed}
-                  >
-                    <td colSpan={COL_SPAN} className="cat-section-header-cell">
-                      <div className="cat-section-header-inner">
-                        <span className="cat-section-chevron" aria-hidden>
-                          {isCollapsed ? '▶' : '▼'}
-                        </span>
-                        <span className="cat-section-label">{s.label}</span>
-                        <span className="cat-section-count">{s.rows.length}</span>
-                      </div>
-                    </td>
-                  </tr>
+        /* Horizontal scroll wrapper — essential when namedPeers.length grows wide */
+        <div className="peer-table-scroll">
+          <table className="peer-comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th className="numeric-col">Your Value</th>
 
-                  {/* ── Metric rows (hidden when collapsed) ── */}
-                  {!isCollapsed && s.rows.map(m => {
-                    const isTop    = m.percentile_rank != null && m.percentile_rank >= 90;
-                    const isBottom = m.percentile_rank != null && m.percentile_rank < 10;
-                    const nTotal        = m.peer_n != null ? m.peer_n + 1 : null;
-                    const isCustomTop    = m.data_quality === 'custom_rank' && m.rank_pos === 1;
-                    const isCustomBottom = m.data_quality === 'custom_rank' && nTotal != null && m.rank_pos === nTotal;
-                    const rowTop    = isTop    || isCustomTop;
-                    const rowBottom = isBottom || isCustomBottom;
-                    const chartOpen = expandedCharts.has(m.metric_name);
-                    return (
-                      <React.Fragment key={m.metric_name}>
-                        <tr className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}>
-                          <td className="metric-name-cell">
-                            <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
-                              {m.is_adverse ? '↓' : '↑'}
-                            </span>
-                            {m.metric_label}
-                          </td>
-                          <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
-                          <td className="numeric-col">{fmt(m.peer_median,       m.unit)}</td>
-                          <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
-                          <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
-                          <td className="numeric-col">
-                            {m.percentile_rank != null
-                              ? `${Math.round(m.percentile_rank)}th`
-                              : m.data_quality === 'custom_rank'
-                                ? <span title={`Exact rank in custom group of ${nTotal ?? '?'} institutions`}>
-                                    {m.rank_ordinal ?? '—'}
-                                  </span>
-                                : m.data_quality === 'insufficient_peer_data'
-                                  ? <span className="muted" title="Too few peer institutions for reliable scoring">
-                                      {`— (n=${m.peer_n ?? '?'})`}
-                                    </span>
-                                  : m.data_quality === 'zero_variance'
-                                    ? <span className="muted" title="All peers report identical values — percentile undefined">
-                                        {m.rank_ordinal ?? 'tied (all equal)'}
-                                      </span>
-                                    : '—'}
-                          </td>
-                          <td><Stars count={m.stars} /></td>
-                          <td className="chart-toggle-col">
-                            <button
-                              className={`chart-toggle-btn${chartOpen ? ' active' : ''}`}
-                              onClick={() => toggleChart(m.metric_name)}
-                              aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
-                              title={chartOpen ? 'Collapse chart' : 'View 3-year trend'}
-                            >
-                              <span className="chart-toggle-label">{chartOpen ? 'Close' : 'Trend'}</span>
-                              {chartOpen ? <ChevronUp /> : <ChevronDown />}
-                            </button>
-                          </td>
-                        </tr>
-                        {chartOpen && (
-                          <tr className="metric-chart-row">
-                            <td colSpan={COL_SPAN} className="metric-chart-cell">
-                              <PeerBandChart
-                                metric={m.metric_name}
-                                charterNumber={charterNumber}
-                                period={period}
-                                peerGroup={peerGroup}
-                                customCharters={customCharters}
-                                nPeriods={12}
-                                token={token}
-                                unit={m.unit}
-                              />
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </React.Fragment>
-              );
-            })}
+                {isNamedMode ? (
+                  /* Named-column headers */
+                  namedPeers.map(p => (
+                    <th
+                      key={p.charter_number}
+                      className="numeric-col named-peer-col-header"
+                      title={p.institution_name}
+                    >
+                      {shortName(p.institution_name)}
+                    </th>
+                  ))
+                ) : (
+                  /* Aggregate column headers */
+                  <>
+                    <th className="numeric-col">Peer Median</th>
+                    <th className="numeric-col">Top Decile</th>
+                    <th className="numeric-col">Bottom Decile</th>
+                  </>
+                )}
 
-            {/* Uncategorized metrics — should never appear; logged to console.warn above */}
-            {uncategorized.map(m => {
-              const chartOpen = expandedCharts.has(m.metric_name);
-              return (
-                <React.Fragment key={m.metric_name}>
-                  <tr className="metric-row">
-                    <td className="metric-name-cell">
-                      <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
-                        {m.is_adverse ? '↓' : '↑'}
-                      </span>
-                      {m.metric_label}
-                    </td>
-                    <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
-                    <td className="numeric-col">{fmt(m.peer_median,       m.unit)}</td>
-                    <td className="numeric-col">{fmt(m.peer_p90,          m.unit)}</td>
-                    <td className="numeric-col">{fmt(m.peer_p10,          m.unit)}</td>
-                    <td className="numeric-col">
-                      {m.percentile_rank != null ? `${Math.round(m.percentile_rank)}th` : '—'}
-                    </td>
-                    <td><Stars count={m.stars} /></td>
-                    <td className="chart-toggle-col">
-                      <button
-                        className={`chart-toggle-btn${chartOpen ? ' active' : ''}`}
-                        onClick={() => toggleChart(m.metric_name)}
-                        aria-label={chartOpen ? 'Collapse trend chart' : 'Expand trend chart'}
-                      >
-                        {chartOpen ? <ChevronUp /> : <ChevronDown />}
-                      </button>
-                    </td>
-                  </tr>
-                  {chartOpen && (
-                    <tr className="metric-chart-row">
-                      <td colSpan={COL_SPAN} className="metric-chart-cell">
-                        <PeerBandChart
-                          metric={m.metric_name}
-                          charterNumber={charterNumber}
-                          period={period}
-                          peerGroup={peerGroup}
-                          customCharters={customCharters}
-                          nPeriods={12}
-                          token={token}
-                          unit={m.unit}
-                        />
+                <th className="numeric-col">
+                  {hasAnyCustomRank ? 'Rank' : 'Percentile'}
+                </th>
+                <th>Stars</th>
+                <th className="chart-toggle-col">Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sections.map(s => {
+                const isCollapsed = collapsedSections.has(s.key);
+                return (
+                  <React.Fragment key={s.key}>
+                    {/* ── Category section header ── */}
+                    <tr
+                      className="cat-section-header-row"
+                      onClick={() => toggleSection(s.key)}
+                      aria-expanded={!isCollapsed}
+                    >
+                      <td colSpan={COL_SPAN} className="cat-section-header-cell">
+                        <div className="cat-section-header-inner">
+                          <span className="cat-section-chevron" aria-hidden>
+                            {isCollapsed ? '▶' : '▼'}
+                          </span>
+                          <span className="cat-section-label">{s.label}</span>
+                          <span className="cat-section-count">{s.rows.length}</span>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+
+                    {/* ── Metric rows (hidden when collapsed) ── */}
+                    {!isCollapsed && s.rows.map(renderMetricRow)}
+                  </React.Fragment>
+                );
+              })}
+
+              {/* Uncategorized metrics — should never appear; logged to console.warn above */}
+              {uncategorized.map(renderMetricRow)}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
