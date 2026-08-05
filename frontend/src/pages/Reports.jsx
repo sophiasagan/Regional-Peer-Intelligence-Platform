@@ -2,13 +2,21 @@
  * Reports — generate and preview board-ready documents.
  *
  * Two report types: Quarterly Board Report + Risk Committee Memo.
- * Preview panel fetches live metrics and renders a document-style outline.
- * Generation produces a .docx download via the API.
+ * Preview panel: real live components per section (no blurred placeholders).
+ * Section toggles: checkboxes in both the ReportCard list and the preview TOC.
+ * Generation produces a .docx download via the API (unchanged — always full template).
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import PeerComparisonTable from '../components/PeerComparisonTable';
+import PeerBandChart from '../components/PeerBandChart';
+import EarlyWarningPanel from '../components/EarlyWarningPanel';
+import CompetitorTable from '../components/CompetitorTable';
+import { CQ_PEER_METRIC_KEYS } from '../utils/metricCategories.js';
 
 const API = import.meta.env.VITE_API_URL ?? '';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const PERIOD_OPTIONS = [
   '2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1',
@@ -60,7 +68,21 @@ const REPORT_DEFS = [
   },
 ];
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Sections with no matching live component yet — honest "not available" placeholder
+const PREVIEW_NOT_AVAILABLE = new Set([
+  'Executive Summary', 'Risk Executive Summary', 'Competitor Movements', 'Recommendations',
+]);
+
+// Map section name → PeerBandChart metric key
+const SECTION_CHART_METRIC = {
+  'Growth Metrics':           'asset_growth_rate',
+  'Delinquency by Loan Type': 'delinq_rate_total',
+  'Charge-off Trends':        'chargeoff_rate_total_annualized',
+  'ALLL / ACL Adequacy':      'alll_coverage',
+  '90+ Day Bucket Detail':    'delinq_rate_90plus',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtPct(v)  { return v != null ? `${(v * 100).toFixed(3)}%` : '—'; }
 function fmtDollar(v) {
@@ -70,9 +92,14 @@ function fmtDollar(v) {
   return `$${Math.round(v).toLocaleString()}`;
 }
 
+// Returns true when section is enabled (null set = all enabled by default)
+function isEnabled(enabledSet, section) {
+  return enabledSet == null || enabledSet.has(section);
+}
+
 const STAR_COLORS = ['', '#C62828', '#E64A19', '#F9A825', '#43A047', '#2E7D32'];
 
-function StarRow({ stars, label }) {
+function StarRow({ stars }) {
   if (stars == null) return null;
   return (
     <span className="rp-star-row" title={`${stars}/5 stars`}>
@@ -83,10 +110,10 @@ function StarRow({ stars, label }) {
   );
 }
 
-// ── Live preview data hook ───────────────────────────────────────────────────
+// ── Data hooks ────────────────────────────────────────────────────────────────
 
 function usePreviewData(charterNumber, period, peerGroup, token, enabled) {
-  const [data, setData]       = useState(null);
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -106,7 +133,21 @@ function usePreviewData(charterNumber, period, peerGroup, token, enabled) {
   return { data, loading };
 }
 
-// ── Preview panel ─────────────────────────────────────────────────────────────
+function useInstitutionDetail(charterNumber, period, token) {
+  const [detail, setDetail] = useState(null);
+  useEffect(() => {
+    if (!charterNumber) return;
+    fetch(`${API}/peer-comparison/institution/${charterNumber}?period=${period}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setDetail(d))
+      .catch(() => {});
+  }, [charterNumber, period, token]);
+  return detail;
+}
+
+// ── Section icons ─────────────────────────────────────────────────────────────
 
 const SECTION_ICONS = {
   'Executive Summary':              '📌',
@@ -124,9 +165,11 @@ const SECTION_ICONS = {
   'Recommendations':                '💡',
 };
 
-function MetricPreviewRow({ label, value, stars, peerMedian, isAdverse }) {
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function MetricPreviewRow({ label, value, stars, peerMedian }) {
   if (value == null) return null;
-  const pct = value < 10 ? fmtPct(value) : fmtDollar(value);
+  const pct    = value < 10 ? fmtPct(value) : fmtDollar(value);
   const medPct = peerMedian != null && peerMedian < 10 ? fmtPct(peerMedian) : null;
   return (
     <div className="rp-preview-metric-row">
@@ -138,38 +181,146 @@ function MetricPreviewRow({ label, value, stars, peerMedian, isAdverse }) {
   );
 }
 
-function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose, onGenerate, generating }) {
+function NotAvailable() {
+  return (
+    <div className="rp-not-available">
+      <span className="rp-na-icon">📋</span>
+      <div>
+        <div className="rp-na-title">Not yet available in preview</div>
+        <div className="rp-na-sub">This section is included in the generated .docx document.</div>
+      </div>
+    </div>
+  );
+}
+
+// Renders live content for each section, or NotAvailable for sections without
+// a matching component. Receives all context from PreviewPanel — no independent
+// data fetching (EarlyWarningPanel + CompetitorTable + PeerBandChart are
+// self-fetching; the peer comparison tables reuse the parent's metrics array).
+function SectionContent({ section, metrics, charterNumber, period, peerGroup, peerGroupLabel, peerCount, token, instDetail }) {
+  if (PREVIEW_NOT_AVAILABLE.has(section)) return <NotAvailable />;
+
+  // Market Position — state-level CompetitorTable for institution's home state
+  if (section === 'Market Position & Deposit Share') {
+    if (!instDetail?.state_abbrev) {
+      return <NotAvailable />;
+    }
+    return (
+      <CompetitorTable
+        geoType="state"
+        geoId={instDetail.state_abbrev}
+        period={period}
+        charterNumber={charterNumber}
+        token={token}
+      />
+    );
+  }
+
+  // Peer Comparison — full metric table, same data as Peer Comparison page
+  if (section === 'Peer Comparison') {
+    return (
+      <PeerComparisonTable
+        metrics={metrics}
+        charterNumber={charterNumber}
+        period={period}
+        peerGroup={peerGroup}
+        peerGroupLabel={peerGroupLabel}
+        peerCount={peerCount}
+        token={token}
+      />
+    );
+  }
+
+  // Credit Quality Overview — asset quality + capital adequacy only (same scope as CreditQuality page)
+  if (section === 'Credit Quality Overview') {
+    const cqMetrics = metrics.filter(m => CQ_PEER_METRIC_KEYS.has(m.metric_name));
+    return (
+      <PeerComparisonTable
+        metrics={cqMetrics}
+        charterNumber={charterNumber}
+        period={period}
+        peerGroup={peerGroup}
+        peerGroupLabel={peerGroupLabel}
+        peerCount={peerCount}
+        token={token}
+      />
+    );
+  }
+
+  // Early Warning Signals — self-fetching EarlyWarningPanel (non-managed = collapsible)
+  if (section === 'Early Warning Signals') {
+    return (
+      <div className="rp-section-ew">
+        <EarlyWarningPanel
+          charterNumber={charterNumber}
+          period={period}
+          peerGroup={peerGroup}
+          token={token}
+        />
+      </div>
+    );
+  }
+
+  // PeerBandChart sections — one metric each
+  const chartMetricKey = SECTION_CHART_METRIC[section];
+  if (chartMetricKey) {
+    const metricData = metrics.find(m => m.metric_name === chartMetricKey);
+    const unit = metricData?.unit ?? '%';
+    return (
+      <div className="rp-section-chart">
+        <PeerBandChart
+          metric={chartMetricKey}
+          charterNumber={charterNumber}
+          period={period}
+          peerGroup={peerGroup}
+          token={token}
+          nPeriods={12}
+          unit={unit}
+        />
+      </div>
+    );
+  }
+
+  return <NotAvailable />;
+}
+
+// ── Preview panel ─────────────────────────────────────────────────────────────
+
+function PreviewPanel({
+  report, charterNumber, period, peerGroup, token,
+  onClose, onGenerate, generating,
+  enabledSections, onToggleSection,
+}) {
   const { data, loading } = usePreviewData(charterNumber, period, peerGroup, token, true);
+  const instDetail = useInstitutionDetail(charterNumber, period, token);
 
-  const instName   = data?.institution_name ?? `Charter #${charterNumber}`;
-  const peerLabel  = data?.peer_group_label ?? peerGroup;
-  const peerCount  = data?.peer_count;
-  const metrics    = data?.metrics ?? [];
+  const instName  = data?.institution_name ?? `Charter #${charterNumber}`;
+  const peerLabel = data?.peer_group_label ?? peerGroup;
+  const peerCount = data?.peer_count;
+  const metrics   = data?.metrics ?? [];
 
-  // Pull key metrics for preview — backend field is metric_name, not metric_key
   function findMetric(key) { return metrics.find(m => m.metric_name === key); }
 
-  const delinq     = findMetric('delinq_rate_total');
-  const chargeoff  = findMetric('chargeoff_rate_total_annualized');
-  const nw         = findMetric('net_worth_ratio');
-  const roa        = findMetric('roa_annualized');
-  const efficiency = findMetric('efficiency_ratio');
-  const alll       = findMetric('alll_coverage');
-
   const KEY_METRICS = report.id === 'quarterly'
-    ? [nw, roa, efficiency, delinq].filter(Boolean)
-    : [delinq, chargeoff, alll, nw].filter(Boolean);
+    ? [findMetric('net_worth_ratio'), findMetric('roa_annualized'), findMetric('efficiency_ratio'), findMetric('delinq_rate_total')].filter(Boolean)
+    : [findMetric('delinq_rate_total'), findMetric('chargeoff_rate_total_annualized'), findMetric('alll_coverage'), findMetric('net_worth_ratio')].filter(Boolean);
+
+  const activeSections = report.sections.filter(s => isEnabled(enabledSections, s));
+  const toggledOffCount = report.sections.length - activeSections.length;
 
   return (
     <div className="rp-preview-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rp-preview-panel">
 
-        {/* Panel header */}
+        {/* Header */}
         <div className="rp-preview-header" style={{ borderTop: `4px solid ${report.color}` }}>
           <div>
             <div className="rp-preview-header-title">
               <span>{report.icon}</span>
               <span>{report.title} — Preview</span>
+              {toggledOffCount > 0 && (
+                <span className="rp-preview-toggle-badge">{toggledOffCount} section{toggledOffCount > 1 ? 's' : ''} hidden</span>
+              )}
             </div>
             <div className="rp-preview-header-sub">
               {instName} · {period} · {peerLabel}
@@ -179,10 +330,10 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
           <button className="rp-preview-close" onClick={onClose} aria-label="Close preview">✕</button>
         </div>
 
-        {/* Panel body — scrollable */}
+        {/* Body */}
         <div className="rp-preview-body">
 
-          {/* Document title page simulation */}
+          {/* Document title block */}
           <div className="rp-doc-title-block" style={{ borderLeft: `4px solid ${report.color}` }}>
             <div className="rp-doc-title">{report.title.toUpperCase()}</div>
             <div className="rp-doc-period">{period}</div>
@@ -193,29 +344,44 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
             <div className="rp-doc-pages">Estimated {report.estimatedPages} pages</div>
           </div>
 
-          {/* Table of contents */}
+          {/* Table of contents with section toggles */}
           <div className="rp-preview-section">
-            <div className="rp-preview-section-title">Table of Contents</div>
+            <div className="rp-preview-section-title">Table of Contents — toggle sections to include in preview</div>
             <div className="rp-toc">
-              {report.sections.map((s, i) => (
-                <div key={s} className="rp-toc-row">
-                  <span className="rp-toc-num">{i + 1}.</span>
-                  <span className="rp-toc-icon">{SECTION_ICONS[s] ?? '▸'}</span>
-                  <span className="rp-toc-label">{s}</span>
-                  <span className="rp-toc-dots" />
-                  <span className="rp-toc-page">{i + 2}</span>
-                </div>
-              ))}
+              {report.sections.map((s, i) => {
+                const on = isEnabled(enabledSections, s);
+                return (
+                  <div key={s} className={`rp-toc-row ${on ? '' : 'rp-toc-row--off'}`}>
+                    <label className="rp-toc-toggle" title={on ? 'Remove from preview' : 'Include in preview'}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => onToggleSection(s)}
+                        className="rp-toc-check"
+                      />
+                    </label>
+                    <span className="rp-toc-num">{i + 1}.</span>
+                    <span className="rp-toc-icon">{SECTION_ICONS[s] ?? '▸'}</span>
+                    <span className="rp-toc-label">{s}</span>
+                    <span className="rp-toc-dots" />
+                    <span className="rp-toc-page">{on ? i + 2 : '—'}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Live metrics preview */}
+          {/* Key metrics — always shown */}
           <div className="rp-preview-section">
             <div className="rp-preview-section-title">
               Key Metrics vs {peerLabel}
               {loading && <span className="rp-loading-dot"> loading…</span>}
             </div>
-            {loading && <div className="rp-skeleton-stack">{[1,2,3,4].map(i => <div key={i} className="rp-skeleton-row"/>)}</div>}
+            {loading && (
+              <div className="rp-skeleton-stack">
+                {[1,2,3,4].map(i => <div key={i} className="rp-skeleton-row" />)}
+              </div>
+            )}
             {!loading && KEY_METRICS.length > 0 && (
               <div className="rp-preview-metrics">
                 {KEY_METRICS.map(m => (
@@ -225,41 +391,70 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
                     value={m.institution_value}
                     stars={m.stars}
                     peerMedian={m.peer_median}
-                    isAdverse={m.is_adverse}
                   />
                 ))}
               </div>
             )}
             {!loading && KEY_METRICS.length === 0 && (
-              <p className="rp-preview-no-data">
-                Connect the database to see live metrics in preview.
-              </p>
+              <p className="rp-preview-no-data">Connect the database to see live metrics in preview.</p>
             )}
           </div>
 
-          {/* Section previews */}
-          {report.sections.map((s, i) => (
-            <div key={s} className="rp-preview-section rp-preview-section--blurred">
-              <div className="rp-preview-section-title">
-                {SECTION_ICONS[s] ?? '▸'} {i + 1}. {s}
+          {/* Section content — only active (enabled) sections rendered */}
+          {activeSections.map((s, idx) => (
+            <div key={s} className="rp-preview-section rp-preview-section--embed">
+              <div className="rp-preview-section-embed-title">
+                <span>{SECTION_ICONS[s] ?? '▸'}</span>
+                <span>{idx + 1}. {s}</span>
+                <button
+                  className="rp-section-hide-btn"
+                  onClick={() => onToggleSection(s)}
+                  title="Hide this section from preview"
+                >
+                  Hide
+                </button>
               </div>
-              <div className="rp-section-placeholder">
-                <div className="rp-placeholder-line rp-placeholder-line--wide"/>
-                <div className="rp-placeholder-line rp-placeholder-line--medium"/>
-                <div className="rp-placeholder-line rp-placeholder-line--narrow"/>
-                <div className="rp-placeholder-chart"/>
-                <div className="rp-placeholder-line rp-placeholder-line--medium"/>
-              </div>
-              <div className="rp-section-generate-cta">
-                Generate the full report to see complete {s.toLowerCase()} with charts and peer comparisons.
-              </div>
+              <SectionContent
+                section={s}
+                metrics={metrics}
+                charterNumber={charterNumber}
+                period={period}
+                peerGroup={peerGroup}
+                peerGroupLabel={peerLabel}
+                peerCount={peerCount}
+                token={token}
+                instDetail={instDetail}
+              />
             </div>
           ))}
+
+          {/* Tombstone for toggled-off sections so user knows what's missing */}
+          {report.sections.filter(s => !isEnabled(enabledSections, s)).length > 0 && (
+            <div className="rp-hidden-sections-bar">
+              <span className="rp-hidden-label">Hidden from preview:</span>
+              {report.sections.filter(s => !isEnabled(enabledSections, s)).map(s => (
+                <button
+                  key={s}
+                  className="rp-hidden-chip"
+                  onClick={() => onToggleSection(s)}
+                  title="Add back to preview"
+                >
+                  {SECTION_ICONS[s] ?? '▸'} {s}
+                </button>
+              ))}
+            </div>
+          )}
+
         </div>
 
-        {/* Panel footer */}
+        {/* Footer */}
         <div className="rp-preview-footer">
-          <span className="rp-preview-format-note">Output: Word document (.docx), ready for board distribution</span>
+          <div className="rp-footer-left">
+            <span className="rp-preview-format-note">Output: Word document (.docx), ready for board distribution</span>
+            <span className="rp-generate-note">
+              The generated document currently includes all standard sections regardless of your preview selection above — customizable export coming soon.
+            </span>
+          </div>
           <button
             className="rp-generate-btn rp-generate-btn--primary"
             style={{ background: report.color }}
@@ -280,12 +475,11 @@ function PreviewPanel({ report, charterNumber, period, peerGroup, token, onClose
 
 // ── Report card ───────────────────────────────────────────────────────────────
 
-function ReportCard({ report, onPreview, onGenerate, generating, lastReport }) {
+function ReportCard({ report, onPreview, onGenerate, generating, lastReport, enabledSections, onToggleSection }) {
   const done = lastReport?.report_type === report.id;
   return (
     <div className={`rp-card ${done ? 'rp-card--done' : ''}`}>
 
-      {/* Card header */}
       <div className="rp-card-header" style={{ background: report.color }}>
         <span className="rp-card-icon">{report.icon}</span>
         <div>
@@ -294,16 +488,29 @@ function ReportCard({ report, onPreview, onGenerate, generating, lastReport }) {
         </div>
       </div>
 
-      {/* Sections list */}
       <div className="rp-card-body">
-        <div className="rp-card-sections-label">Includes</div>
+        <div className="rp-card-sections-label">
+          Includes
+          <span className="rp-card-toggle-hint"> — check/uncheck to include in preview</span>
+        </div>
         <ul className="rp-card-sections">
-          {report.sections.map(s => (
-            <li key={s} className="rp-card-section-item">
-              <span className="rp-card-section-icon">{SECTION_ICONS[s] ?? '▸'}</span>
-              {s}
-            </li>
-          ))}
+          {report.sections.map(s => {
+            const on = isEnabled(enabledSections, s);
+            return (
+              <li key={s} className={`rp-card-section-item ${on ? '' : 'rp-card-section-item--off'}`}>
+                <label className="rp-card-section-label">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => onToggleSection(s)}
+                    className="rp-card-section-check"
+                  />
+                  <span className="rp-card-section-icon">{SECTION_ICONS[s] ?? '▸'}</span>
+                  {s}
+                </label>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="rp-card-meta">
@@ -318,7 +525,6 @@ function ReportCard({ report, onPreview, onGenerate, generating, lastReport }) {
         )}
       </div>
 
-      {/* Card footer buttons */}
       <div className="rp-card-footer">
         <button className="rp-preview-trigger" onClick={() => onPreview(report)}>
           Preview
@@ -354,12 +560,24 @@ function ReportCard({ report, onPreview, onGenerate, generating, lastReport }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Reports({ charterNumber, token }) {
-  const [period,      setPeriod]      = useState('2026Q1');
-  const [peerGroup,   setPeerGroup]   = useState('REGIONAL');
-  const [generating,  setGenerating]  = useState(null);
-  const [reports,     setReports]     = useState({});   // id → lastReport
-  const [error,       setError]       = useState(null);
-  const [previewing,  setPreviewing]  = useState(null); // report def
+  const [period,         setPeriod]         = useState('2026Q1');
+  const [peerGroup,      setPeerGroup]      = useState('REGIONAL');
+  const [generating,     setGenerating]     = useState(null);
+  const [reports,        setReports]        = useState({});
+  const [error,          setError]          = useState(null);
+  const [previewing,     setPreviewing]     = useState(null);
+  // sectionToggles: { [reportId]: Set<sectionName> } — null key = all enabled
+  const [sectionToggles, setSectionToggles] = useState({});
+
+  function toggleSection(reportId, section) {
+    setSectionToggles(prev => {
+      const allSections = REPORT_DEFS.find(r => r.id === reportId).sections;
+      const current = prev[reportId] ?? new Set(allSections);
+      const next = new Set(current);
+      next.has(section) ? next.delete(section) : next.add(section);
+      return { ...prev, [reportId]: next };
+    });
+  }
 
   async function handleGenerate(report) {
     setGenerating(report.id);
@@ -383,7 +601,6 @@ export default function Reports({ charterNumber, token }) {
   return (
     <div className="rp-page">
 
-      {/* ── Page header ── */}
       <div className="rp-header">
         <div>
           <h1 className="rp-title">Reports</h1>
@@ -391,7 +608,6 @@ export default function Reports({ charterNumber, token }) {
         </div>
       </div>
 
-      {/* ── Controls bar ── */}
       <div className="rp-controls">
         <label className="rp-control-label">
           Period
@@ -421,7 +637,6 @@ export default function Reports({ charterNumber, token }) {
         </div>
       )}
 
-      {/* ── Report cards ── */}
       <div className="rp-card-grid">
         {REPORT_DEFS.map(report => (
           <ReportCard
@@ -431,11 +646,12 @@ export default function Reports({ charterNumber, token }) {
             onGenerate={handleGenerate}
             generating={generating}
             lastReport={reports[report.id] ?? null}
+            enabledSections={sectionToggles[report.id] ?? null}
+            onToggleSection={section => toggleSection(report.id, section)}
           />
         ))}
       </div>
 
-      {/* ── Preview panel ── */}
       {previewing && (
         <PreviewPanel
           report={previewing}
@@ -446,6 +662,8 @@ export default function Reports({ charterNumber, token }) {
           onClose={() => setPreviewing(null)}
           onGenerate={handleGenerate}
           generating={generating}
+          enabledSections={sectionToggles[previewing.id] ?? null}
+          onToggleSection={section => toggleSection(previewing.id, section)}
         />
       )}
     </div>

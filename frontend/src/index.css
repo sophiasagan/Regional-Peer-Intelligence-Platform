@@ -1070,7 +1070,8 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .rp-star-row        { display: inline-flex; gap: 1px; }
 .rp-preview-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.4); display: flex; align-items: stretch; justify-content: flex-end; animation: rp-fade-in .15s ease; }
 @keyframes rp-fade-in { from { opacity: 0; } }
-.rp-preview-panel   { width: min(640px, 95vw); height: 100%; background: #fff; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,.15); animation: rp-slide-in .2s ease; }
+/* Wider panel to give embedded peer tables enough room */
+.rp-preview-panel   { width: min(860px, 96vw); height: 100%; background: #fff; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,.15); animation: rp-slide-in .2s ease; }
 @keyframes rp-slide-in { from { transform: translateX(60px); opacity: 0; } }
 .rp-preview-header  { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-shrink: 0; }
 .rp-preview-header-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
@@ -1107,6 +1108,65 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .rp-skeleton-stack  { display: flex; flex-direction: column; gap: 8px; }
 .rp-skeleton-row    { height: 36px; background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%); background-size: 200% 100%; border-radius: 4px; animation: rp-shimmer 1.4s infinite; }
 @keyframes rp-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+/* ── Section toggles: TOC checkboxes ── */
+.rp-toc-row--off    { opacity: .45; }
+.rp-toc-toggle      { display: inline-flex; align-items: center; margin-right: 4px; cursor: pointer; }
+.rp-toc-check       { cursor: pointer; accent-color: #1A237E; width: 14px; height: 14px; }
+
+/* ── Card section checkboxes ── */
+.rp-card-toggle-hint        { font-size: 10px; font-weight: 400; color: #9CA3AF; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+.rp-card-section-label      { display: flex; align-items: center; gap: 6px; cursor: pointer; width: 100%; }
+.rp-card-section-check      { cursor: pointer; accent-color: #1A237E; flex-shrink: 0; }
+.rp-card-section-item--off  { opacity: .45; text-decoration: line-through; }
+
+/* ── Embedded-component section variant ── */
+.rp-preview-section--embed  { padding: 0 !important; overflow: hidden; }
+.rp-preview-section-embed-title {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background: #F8FAFF;
+}
+.rp-section-hide-btn {
+  margin-left: auto; font-size: 11px; background: none; border: none;
+  cursor: pointer; color: #9CA3AF; padding: 2px 6px; border-radius: 3px;
+}
+.rp-section-hide-btn:hover { color: #EF4444; background: #FEF2F2; }
+
+/* Chart wrapper inside section */
+.rp-section-chart   { padding: 0 4px 4px; }
+.rp-section-ew      { padding: 4px 0; }
+
+/* ── Not-available placeholder ── */
+.rp-not-available   { display: flex; align-items: center; gap: 12px; padding: 16px 20px; color: var(--text-muted); }
+.rp-na-icon         { font-size: 22px; flex-shrink: 0; opacity: .7; }
+.rp-na-title        { font-size: 13px; font-weight: 600; color: #6B7280; margin-bottom: 2px; }
+.rp-na-sub          { font-size: 12px; color: #9CA3AF; }
+
+/* ── Hidden sections tombstone bar ── */
+.rp-hidden-sections-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  padding: 10px 14px; background: #F9FAFB;
+  border: 1px dashed #D1D5DB; border-radius: 8px;
+  font-size: 12px;
+}
+.rp-hidden-label    { font-size: 11px; color: #9CA3AF; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0; }
+.rp-hidden-chip     {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border: 1px solid #D1D5DB; border-radius: 12px;
+  background: #fff; font-size: 12px; cursor: pointer; color: #374151;
+  transition: border-color .1s, background .1s;
+}
+.rp-hidden-chip:hover { border-color: #6366F1; background: #EEF2FF; color: #3730A3; }
+
+/* ── Footer ── */
+.rp-footer-left     { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.rp-generate-note   { font-size: 11px; color: #9CA3AF; font-style: italic; line-height: 1.4; }
+.rp-preview-toggle-badge { font-size: 11px; font-weight: 500; background: #FEF3C7; color: #92400E; padding: 2px 8px; border-radius: 10px; }
+
+/* Keep old placeholder classes in case anything references them */
 .rp-preview-section--blurred { opacity: .7; }
 .rp-section-placeholder { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .rp-placeholder-line  { height: 11px; background: #E5E7EB; border-radius: 3px; }
