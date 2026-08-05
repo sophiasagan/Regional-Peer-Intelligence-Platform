@@ -11,7 +11,7 @@ import PeerComparisonTable from '../components/PeerComparisonTable';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
-const PEER_GROUPS = [
+const STANDARD_PEER_GROUPS = [
   { key: 'REGIONAL',   label: 'Regional peers' },
   { key: 'ASSET_SIZE', label: 'National peers'  },
   { key: 'STATE',      label: 'State'           },
@@ -56,27 +56,41 @@ function loadSavedPeerCharters() {
 
 export default function PeerComparison({ charterNumber, token }) {
   const [period,         setPeriod]         = useState('2026Q1');
+  // peerGroup can be 'REGIONAL' | 'ASSET_SIZE' | 'STATE' | 'CUSTOM'
   const [peerGroup,      setPeerGroup]      = useState('REGIONAL');
+  // customCharters is PRESERVED when the user switches to a standard tab,
+  // so they can return to "Custom" without re-selecting.
   const [customCharters, setCustomCharters] = useState(loadSavedPeerCharters);
 
+  const effectivePeerGroup = peerGroup === 'CUSTOM' ? 'CUSTOM' : peerGroup;
+
   const { data, loading } = usePeerComparison(
-    charterNumber, period, peerGroup, token, customCharters,
+    charterNumber, period, effectivePeerGroup, token,
+    peerGroup === 'CUSTOM' ? customCharters : null,
   );
 
-  function handlePeerGroupChange(group) {
-    setPeerGroup(group);
-    setCustomCharters(null);   // reset custom selection when switching group type
+  function handleTabChange(key) {
+    if (key === 'CUSTOM') {
+      // Re-activate saved custom selection — if none yet, open the panel via table
+      setPeerGroup('CUSTOM');
+    } else {
+      // Switch to standard group; keep customCharters alive for later return
+      setPeerGroup(key);
+    }
   }
 
   function handleCustomCharters(charters) {
     if (!charters) {
+      // Reset: clear custom selection and fall back to REGIONAL
       setCustomCharters(null);
+      setPeerGroup('REGIONAL');
     } else {
       setCustomCharters(charters);
-      // Custom selection is treated as CUSTOM group type — keep peer_group as base
+      setPeerGroup('CUSTOM');
     }
   }
 
+  const hasCustom      = customCharters?.length > 0;
   const metrics        = data?.metrics ?? [];
   const peerGroupLabel = data?.peer_group_label ?? '';
   const peerCount      = data?.peer_count;
@@ -95,15 +109,25 @@ export default function PeerComparison({ charterNumber, token }) {
         <div className="topbar-center">
           <span className="topbar-label">Peer group</span>
           <div className="peer-toggle" role="group" aria-label="Peer group">
-            {PEER_GROUPS.map(({ key, label }) => (
+            {STANDARD_PEER_GROUPS.map(({ key, label }) => (
               <button
                 key={key}
                 className={`toggle-btn ${peerGroup === key ? 'active' : ''}`}
-                onClick={() => handlePeerGroupChange(key)}
+                onClick={() => handleTabChange(key)}
               >
                 {label}
               </button>
             ))}
+            {/* Custom tab — only visible once the user has made a custom selection */}
+            {hasCustom && (
+              <button
+                className={`toggle-btn toggle-btn--custom ${peerGroup === 'CUSTOM' ? 'active' : ''}`}
+                onClick={() => handleTabChange('CUSTOM')}
+                title={`Custom selection · ${customCharters.length} institution${customCharters.length === 1 ? '' : 's'}`}
+              >
+                Custom ({customCharters.length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -131,11 +155,11 @@ export default function PeerComparison({ charterNumber, token }) {
           metrics={metrics}
           charterNumber={charterNumber}
           period={period}
-          peerGroup={customCharters ? 'CUSTOM' : peerGroup}
+          peerGroup={peerGroup}
           peerGroupLabel={peerGroupLabel}
           peerCount={peerCount}
           token={token}
-          customCharters={customCharters}
+          customCharters={peerGroup === 'CUSTOM' ? customCharters : null}
           onCustomCharters={handleCustomCharters}
         />
       </div>

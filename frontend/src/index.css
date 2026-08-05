@@ -303,6 +303,9 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .toggle-btn:last-child           { border-right: none; }
 .toggle-btn:hover:not(.active)   { background: var(--bg-gray); color: var(--text); }
 .toggle-btn.active               { background: #1A237E; color: #fff; }
+/* Custom tab — separated visually with a left gap so it reads as a distinct action */
+.toggle-btn--custom              { border-left: 2px solid var(--border); margin-left: 4px; font-style: italic; }
+.toggle-btn--custom.active       { background: #4A148C; color: #fff; }
 .topbar-right {
   display: flex;
   align-items: center;
