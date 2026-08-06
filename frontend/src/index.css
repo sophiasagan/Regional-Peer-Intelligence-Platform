@@ -214,6 +214,10 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .sp-tier-current      { flex: 0 0 auto; padding: 7px 14px; font-size: 12px; font-weight: 600; text-align: center; color: var(--text); }
 .sp-tier-header       { padding: 5px 14px 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #1A237E; background: #E8EAF6; }
 .sp-tier-header--adjacent { color: var(--text-muted); background: #F5F5F5; }
+.sp-search            { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.sp-search-input      { width: 100%; padding: 5px 9px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
+.sp-search-input:focus { border-color: #5C6BC0; box-shadow: 0 0 0 2px rgba(92,107,192,0.15); }
+.sp-no-results        { padding: 20px 14px; text-align: center; font-size: 13px; color: var(--text-muted); }
 
 /* ── Competitor table ── */
 .competitor-table-wrapper { display: flex; flex-direction: column; height: 100%; }
@@ -531,6 +535,15 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .peer-comparison-table        { min-width: 600px; }
 .named-peer-col-header        { min-width: 110px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .named-peer-col               { text-align: right !important; font-variant-numeric: tabular-nums; }
+
+/* ── Sticky Metric + Your Value columns ── */
+.peer-comparison-table .col-metric,
+.peer-comparison-table .col-your-value { position: sticky; z-index: 2; }
+.peer-comparison-table .col-metric     { left: 0; width: 160px; min-width: 160px; max-width: 160px; }
+.peer-comparison-table .col-your-value { left: 160px; min-width: 90px; box-shadow: 2px 0 5px rgba(0,0,0,0.07); }
+/* Body cells need an explicit background so scrolled content doesn't bleed through */
+.peer-comparison-table tbody .col-metric,
+.peer-comparison-table tbody .col-your-value { background: white; }
 
 /* ── Metric library (nav — hidden when not rendered) ── */
 .metric-library      { width: 210px; flex-shrink: 0; border-right: 1px solid var(--border); background: #fff; overflow-y: auto; }

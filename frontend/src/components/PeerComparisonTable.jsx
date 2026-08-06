@@ -116,6 +116,7 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
   const [loading,     setLoading]     = useState(true);
   const [expandBelow, setExpandBelow] = useState(false);
   const [expandAbove, setExpandAbove] = useState(false);
+  const [search,      setSearch]      = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -159,10 +160,15 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
   const allChecked  = institutions.length > 0 && checked.size === institutions.length;
   const someChecked = checked.size > 0 && checked.size < institutions.length;
 
-  // Group by tier for section headers
+  // Filter by name search, then group by tier for section headers
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? institutions.filter(i => i.institution_name.toLowerCase().includes(query))
+    : institutions;
+
   const byTier = [];
   let lastTier = null;
-  for (const inst of institutions) {
+  for (const inst of filtered) {
     if (inst.tier_label !== lastTier) {
       byTier.push({ type: 'header', label: inst.tier_label, isBase: inst.is_base_tier });
       lastTier = inst.tier_label;
@@ -206,6 +212,16 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
         <div className="sp-loading">Loading…</div>
       ) : (
         <>
+          <div className="sp-search">
+            <input
+              type="search"
+              className="sp-search-input"
+              placeholder="Search institutions…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
           <div className="sp-controls">
             <label className="sp-check-all">
               <input
@@ -219,7 +235,9 @@ function SelectPeersPanel({ charterNumber, period, peerGroup, onApply, onClose }
           </div>
 
           <ul className="sp-list">
-            {byTier.map((item, i) =>
+            {byTier.length === 0 && query ? (
+              <li className="sp-no-results">No institutions match "{search}"</li>
+            ) : byTier.map((item) =>
               item.type === 'header' ? (
                 <li key={`h-${item.label}`} className={`sp-tier-header ${item.isBase ? '' : 'sp-tier-header--adjacent'}`}>
                   {item.label}{item.isBase ? ' (base tier)' : ''}
@@ -393,13 +411,13 @@ export default function PeerComparisonTable({
     return (
       <React.Fragment key={m.metric_name}>
         <tr className={`metric-row${rowTop ? ' row-top-decile' : rowBottom ? ' row-bottom-decile' : ''}`}>
-          <td className="metric-name-cell">
+          <td className="col-metric metric-name-cell">
             <span className="polarity-indicator" title={m.is_adverse ? 'Adverse metric' : 'Positive metric'}>
               {m.is_adverse ? '↓' : '↑'}
             </span>
             {m.metric_label}
           </td>
-          <td className="numeric-col">{fmt(m.institution_value, m.unit)}</td>
+          <td className="col-your-value numeric-col">{fmt(m.institution_value, m.unit)}</td>
 
           {isNamedMode ? (
             /* Named-column mode: one cell per selected institution */
@@ -546,8 +564,8 @@ export default function PeerComparisonTable({
           <table className="peer-comparison-table">
             <thead>
               <tr>
-                <th>Metric</th>
-                <th className="numeric-col">Your Value</th>
+                <th className="col-metric">Metric</th>
+                <th className="col-your-value numeric-col">Your Value</th>
 
                 {isNamedMode ? (
                   /* Named-column headers */
