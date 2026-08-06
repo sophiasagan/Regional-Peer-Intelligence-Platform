@@ -113,11 +113,6 @@ export default function Setup({ onComplete }) {
           </button>
         </form>
 
-        <p className="setup-hint">
-          Demo: use <button className="setup-demo-link" onClick={() => { setInput('68708'); lookup('68708'); }}>
-            68708
-          </button> (Dort Financial CU, MI)
-        </p>
 
       </div>
 
