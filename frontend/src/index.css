@@ -1120,7 +1120,10 @@ details[open] .nl-data-summary::before { content: '▼ '; }
 .rp-card-section-item--off  { opacity: .45; text-decoration: line-through; }
 
 /* ── Embedded-component section variant ── */
-.rp-preview-section--embed  { padding: 0 !important; overflow: hidden; }
+/* flex-shrink: 0 prevents the flex column body from squashing embed sections to their
+   title-only height. overflow: visible lets the embedded component's own border/scroll
+   define its bounds rather than clipping here. */
+.rp-preview-section--embed  { padding: 0 !important; overflow: visible; flex-shrink: 0; }
 .rp-preview-section-embed-title {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px;
