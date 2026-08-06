@@ -21,7 +21,7 @@ const NAV = [
   { to: '/credit-quality',   icon: '📊', label: 'Credit Quality'   },
   { to: '/market-map',       icon: '🗺',  label: 'Market Map'       },
   { to: '/peer-comparison',  icon: '⚖️',  label: 'Peer Comparison'  },
-  ...(_SHOW_ASK ? [{ to: '/query', icon: '💬', label: 'Ask Intelligence' }] : []),
+  ...(_SHOW_ASK ? [{ to: '/query', icon: '💬', label: 'Ask Magnus' }] : []),
   { to: '/reports',          icon: '📄', label: 'Reports'          },
   { to: '/peer-group-setup', icon: '🔀', label: 'Peer Group Setup' },
 ]

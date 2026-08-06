@@ -36,7 +36,7 @@ const FEATURES = [
   {
     to: '/query',
     icon: '💬',
-    title: 'Ask Intelligence',
+    title: 'Ask Magnus',
     color: '#00696E',
     bg: '#E0F2F1',
     desc: 'Natural language queries about your institution and peer group. Charts auto-generated.',
