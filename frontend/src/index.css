@@ -356,6 +356,7 @@ th { background: var(--bg-gray); font-weight: 600; white-space: nowrap; }
 .decile-badge   { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; white-space: nowrap; flex-shrink: 0; }
 .badge-green    { background: var(--bg-green); color: var(--color-green); }
 .badge-red      { background: var(--bg-red);   color: var(--color-red); }
+.badge-beta     { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 2px 6px; border-radius: 4px; background: #E8EAF6; color: #3949AB; vertical-align: middle; line-height: 1.4; }
 .kpi-body       { display: flex; align-items: baseline; gap: 8px; }
 .kpi-value      { font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .kpi-trend-arrow { font-size: 16px; }

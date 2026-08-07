@@ -37,6 +37,7 @@ const FEATURES = [
     to: '/query',
     icon: '💬',
     title: 'Ask Magnus',
+    badge: 'BETA',
     color: '#00696E',
     bg: '#E0F2F1',
     desc: 'Natural language queries about your institution and peer group. Charts auto-generated.',
@@ -114,7 +115,10 @@ export default function Home({ charterNumber, token, onReset }) {
               {f.icon}
             </div>
             <div className="home-card-body">
-              <div className="home-card-title" style={{ color: f.color }}>{f.title}</div>
+              <div className="home-card-title" style={{ color: f.color }}>
+                {f.title}
+                {f.badge && <span className="badge-beta">{f.badge}</span>}
+              </div>
               <div className="home-card-desc">{f.desc}</div>
             </div>
             <span className="home-card-arrow">→</span>

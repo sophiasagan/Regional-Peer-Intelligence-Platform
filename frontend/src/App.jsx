@@ -21,7 +21,7 @@ const NAV = [
   { to: '/credit-quality',   icon: '📊', label: 'Credit Quality'   },
   { to: '/market-map',       icon: '🗺',  label: 'Market Map'       },
   { to: '/peer-comparison',  icon: '⚖️',  label: 'Peer Comparison'  },
-  ...(_SHOW_ASK ? [{ to: '/query', icon: '💬', label: 'Ask Magnus' }] : []),
+  ...(_SHOW_ASK ? [{ to: '/query', icon: '💬', label: 'Ask Magnus', beta: true }] : []),
   { to: '/reports',          icon: '📄', label: 'Reports'          },
   { to: '/peer-group-setup', icon: '🔀', label: 'Peer Group Setup' },
 ]
@@ -32,7 +32,7 @@ function Sidebar({ charterNumber, onReset }) {
     <aside className="sidebar">
       <div className="sidebar-logo">Magnus</div>
       <nav className="sidebar-nav">
-        {NAV.map(({ to, icon, label }) => (
+        {NAV.map(({ to, icon, label, beta }) => (
           <NavLink
             key={to}
             to={to}
@@ -40,6 +40,7 @@ function Sidebar({ charterNumber, onReset }) {
           >
             <span className="nav-icon">{icon}</span>
             {label}
+            {beta && <span className="badge-beta">BETA</span>}
           </NavLink>
         ))}
       </nav>
