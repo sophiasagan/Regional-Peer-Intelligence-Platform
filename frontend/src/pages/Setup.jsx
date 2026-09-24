@@ -17,7 +17,7 @@ export default function Setup({ onComplete }) {
     const num = parseInt(raw, 10);
     if (!num || raw.length < 4) { setPreview(null); return; }
     try {
-      const res = await fetch(`${API}/institutions/${num}?period=2026Q1`, {
+      const res = await fetch(`${API}/institutions/${num}?period=2026Q2`, {
         headers: { Authorization: 'Bearer demo' },
       });
       if (!res.ok) { setPreview(null); return; }
@@ -43,7 +43,7 @@ export default function Setup({ onComplete }) {
     setError(null);
     try {
       // Verify the institution exists
-      const res = await fetch(`${API}/institutions/${num}?period=2026Q1`, {
+      const res = await fetch(`${API}/institutions/${num}?period=2026Q2`, {
         headers: { Authorization: 'Bearer demo' },
       });
       if (!res.ok) {

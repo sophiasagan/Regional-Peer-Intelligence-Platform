@@ -18,6 +18,7 @@ const STANDARD_PEER_GROUPS = [
 ];
 
 const PERIOD_OPTIONS = [
+  { label: '2026Q2' },
   { label: '2026Q1' },
   { label: '2025Q4' },
   { label: '2025Q3' },
@@ -55,7 +56,7 @@ function loadSavedPeerCharters() {
 }
 
 export default function PeerComparison({ charterNumber, token }) {
-  const [period,         setPeriod]         = useState('2026Q1');
+  const [period,         setPeriod]         = useState('2026Q2');
   // peerGroup can be 'REGIONAL' | 'ASSET_SIZE' | 'STATE' | 'CUSTOM'
   const [peerGroup,      setPeerGroup]      = useState('REGIONAL');
   // customCharters is PRESERVED when the user switches to a standard tab,

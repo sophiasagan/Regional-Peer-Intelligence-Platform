@@ -129,7 +129,7 @@ async def health() -> dict:
 
 
 @app.get("/institutions/{charter_number}")
-async def get_institution(charter_number: int, period: str = "2026Q1"):
+async def get_institution(charter_number: int, period: str = "2026Q2"):
     """Return basic identity fields for a charter number. Used by Setup + Home pages."""
     from sqlalchemy import select
     from db import get_engine, institutions_quarterly

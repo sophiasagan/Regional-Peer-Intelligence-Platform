@@ -57,7 +57,7 @@ function fmtValue(v, format) {
   return String(v);
 }
 
-export default function PeerGroupSetup({ charterNumber, token, period = '2026Q1' }) {
+export default function PeerGroupSetup({ charterNumber, token, period = '2026Q2' }) {
   const navigate = useNavigate();
 
   const [assetTier,      setAssetTier]      = useState('');

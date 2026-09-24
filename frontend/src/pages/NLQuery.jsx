@@ -14,7 +14,7 @@ import PeerBandChart from '../components/PeerBandChart';
 const API = import.meta.env.VITE_API_URL ?? '';
 
 const PERIOD_OPTIONS = [
-  '2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1',
+  '2026Q2', '2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1',
   '2024Q4', '2024Q3', '2024Q2', '2024Q1', '2023Q4',
 ];
 
@@ -88,7 +88,7 @@ function DataItem({ label, value }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function NLQuery({ charterNumber, token, defaultPeriod = '2026Q1' }) {
+export default function NLQuery({ charterNumber, token, defaultPeriod = '2026Q2' }) {
   const [question,  setQuestion]  = useState('');
   const [period,    setPeriod]    = useState(defaultPeriod);
   const [peerGroup, setPeerGroup] = useState('REGIONAL');

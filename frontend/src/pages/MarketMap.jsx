@@ -689,7 +689,7 @@ function buildPeriodList(latest, count = 16) {
   }
   return out;
 }
-const QUICK_PERIODS = buildPeriodList('2026Q1', 16);
+const QUICK_PERIODS = buildPeriodList('2026Q2', 16);
 
 function PeriodSelector({ period, onPeriodChange, compareMode, comparePeriod, onCompareModeChange, onComparePeriodChange }) {
   return (
@@ -760,7 +760,7 @@ function MapMetricBar({ activeMetric, onChange }) {
 export default function MarketMap({ charterNumber, token }) {
   const [geoType,        setGeoType]       = useState('county');
   const [geoId,          setGeoId]         = useState('');
-  const [period,         setPeriod]        = useState('2026Q1');
+  const [period,         setPeriod]        = useState('2026Q2');
   const [compareMode,    setCompareMode]   = useState(false);
   const [comparePeriod,  setComparePeriod] = useState('2025Q1');
   const [activeMetric,   setActiveMetric]  = useState('deposits');

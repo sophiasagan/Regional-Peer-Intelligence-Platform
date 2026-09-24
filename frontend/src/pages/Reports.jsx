@@ -19,7 +19,7 @@ const API = import.meta.env.VITE_API_URL ?? '';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PERIOD_OPTIONS = [
-  '2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1',
+  '2026Q2', '2026Q1', '2025Q4', '2025Q3', '2025Q2', '2025Q1',
   '2024Q4', '2024Q3', '2024Q2', '2024Q1',
 ];
 
@@ -533,7 +533,7 @@ function ReportCard({ report, onPreview, onGenerate, generating, lastReport, ena
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Reports({ charterNumber, token }) {
-  const [period,         setPeriod]         = useState('2026Q1');
+  const [period,         setPeriod]         = useState('2026Q2');
   const [peerGroup,      setPeerGroup]      = useState('REGIONAL');
   const [generating,     setGenerating]     = useState(null);
   const [reports,        setReports]        = useState({});

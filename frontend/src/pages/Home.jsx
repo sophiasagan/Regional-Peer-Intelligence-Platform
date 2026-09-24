@@ -66,7 +66,7 @@ export default function Home({ charterNumber, token, onReset }) {
 
   useEffect(() => {
     if (!charterNumber) return;
-    fetch(`${API}/institutions/${charterNumber}?period=2026Q1`, {
+    fetch(`${API}/institutions/${charterNumber}?period=2026Q2`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)

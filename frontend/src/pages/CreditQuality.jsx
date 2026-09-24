@@ -521,7 +521,7 @@ function loadSavedPeerCharters() {
 }
 
 export default function CreditQuality({ charterNumber, token }) {
-  const [period,         setPeriod]        = useState('2026Q1');
+  const [period,         setPeriod]        = useState('2026Q2');
   const [periodLabel,    setPeriodLabel]   = useState('3Y');
   const [nPeriods,       setNPeriods]      = useState(12);
   const [peerGroup,      setPeerGroup]     = useState('REGIONAL');
