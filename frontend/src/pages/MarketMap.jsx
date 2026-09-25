@@ -21,20 +21,22 @@ const API            = import.meta.env.VITE_API_URL ?? '';
 const COUNTY_GEOJSON = import.meta.env.VITE_COUNTY_GEOJSON_URL
   ?? 'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json';
 
-// Free CartoDB Positron style — no token required
-const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+// Free CartoDB Dark Matter style (dark counterpart of Positron) — no token required
+const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
-// Color scale
+// Color scale. MapLibre paint properties can't read CSS variables, so these are literal hex,
+// hand-matched to the Magnus theme tokens in index.css (--primary-blue / --electric / --color-orange / --color-purple).
+// On the dark basemap the ramp runs dim → bright (higher share = brighter), the inverse of the old light-map ramp.
 const SHARE_COLORS = [
-  { threshold: 0.30, color: '#1E3A8A' },
-  { threshold: 0.15, color: '#2563EB' },
-  { threshold: 0.05, color: '#93C5FD' },
-  { threshold: 0,    color: '#DBEAFE' },
+  { threshold: 0.30, color: '#7DE3FF' },   // light electric
+  { threshold: 0.15, color: '#00AEEF' },   // --primary-blue
+  { threshold: 0.05, color: '#1F7AB8' },
+  { threshold: 0,    color: '#17486E' },
 ];
-const COMPETITOR_COLOR      = '#EA580C';
-const NO_DATA_COLOR         = '#E5E7EB';
-const REGION_SELECTED_COLOR = '#C4B5FD'; // indigo-300 — custom region selected counties
-const STATE_NO_DATA_COLOR   = '#BFDBFE'; // blue-200 — in-state counties with no share data
+const COMPETITOR_COLOR      = '#FF8A3D';   // --color-orange
+const NO_DATA_COLOR         = '#2B333D';   // neutral slate, reads as "empty" against the dark basemap
+const REGION_SELECTED_COLOR = '#B888FF';   // --color-purple — custom region selected counties
+const STATE_NO_DATA_COLOR   = '#4A5D78';   // steel — in-state counties with no share data
 
 // Approximate bounding boxes [minLng, minLat, maxLng, maxLat] per 2-digit state FIPS
 const STATE_BBOX = {
@@ -276,7 +278,7 @@ function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) 
         type:   'fill',
         source: 'counties',
         paint:  {
-          'fill-color':   '#1E40AF',
+          'fill-color':   '#F4F7FA',
           'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0],
         },
       });
@@ -285,7 +287,7 @@ function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) 
         id:     'county-borders',
         type:   'line',
         source: 'counties',
-        paint:  { 'line-color': '#CBD5E1', 'line-width': 0.5 },
+        paint:  { 'line-color': '#59636E', 'line-width': 0.5 },
       });
 
       map.addLayer({
@@ -293,7 +295,7 @@ function useMapLibre(containerRef, onCountyClick, colorExpr, regionOutlineExpr) 
         type:   'line',
         source: 'counties',
         paint:  {
-          'line-color': '#1D4ED8',
+          'line-color': '#F4F7FA',
           'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 2.5, 0],
         },
       });
@@ -943,9 +945,9 @@ export default function MarketMap({ charterNumber, token }) {
           {metricAvailable && heatmapCounties.length > 0 && (
             <div className="map-geo-note">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <circle cx="6" cy="6" r="5.5" stroke="#94A3B8" strokeWidth="1"/>
-                <rect x="5.25" y="4.5" width="1.5" height="4.5" rx=".75" fill="#94A3B8"/>
-                <circle cx="6" cy="3" r=".75" fill="#94A3B8"/>
+                <circle cx="6" cy="6" r="5.5" stroke="var(--text-muted)" strokeWidth="1"/>
+                <rect x="5.25" y="4.5" width="1.5" height="4.5" rx=".75" fill="var(--text-muted)"/>
+                <circle cx="6" cy="3" r=".75" fill="var(--text-muted)"/>
               </svg>
               Map: per-county share · Table: total across selected{' '}
               {GEO_SCOPE_LABELS[geoType] ?? 'geography'}

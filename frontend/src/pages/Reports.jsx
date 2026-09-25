@@ -44,7 +44,7 @@ const REPORT_DEFS = [
       'Data Notes',
     ],
     estimatedPages: 12,
-    color:          '#1565C0',
+    color:          'var(--fill-blue)',
     endpoint:       n => `/reports/quarterly/${n}`,
   },
   {
@@ -61,7 +61,7 @@ const REPORT_DEFS = [
       'Recommendations',
     ],
     estimatedPages: 8,
-    color:          '#6A1B9A',
+    color:          'var(--fill-purple)',
     endpoint:       n => `/reports/credit-quality/${n}`,
   },
 ];
@@ -95,14 +95,14 @@ function isEnabled(enabledSet, section) {
   return enabledSet == null || enabledSet.has(section);
 }
 
-const STAR_COLORS = ['', '#C62828', '#E64A19', '#F9A825', '#43A047', '#2E7D32'];
+const STAR_COLORS = ['', 'var(--color-red)', 'var(--color-orange)', 'var(--color-amber)', 'color-mix(in srgb, var(--color-green) 72%, var(--color-amber))', 'var(--color-green)'];
 
 function StarRow({ stars }) {
   if (stars == null) return null;
   return (
     <span className="rp-star-row" title={`${stars}/5 stars`}>
       {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} style={{ color: i < stars ? STAR_COLORS[stars] : '#D1D5DB', fontSize: 14 }}>★</span>
+        <span key={i} style={{ color: i < stars ? STAR_COLORS[stars] : 'var(--gunmetal)', fontSize: 14 }}>★</span>
       ))}
     </span>
   );
@@ -420,7 +420,7 @@ function PreviewPanel({
           <div className="rp-footer-left">
             <span className="rp-preview-format-note">Output: Word document (.docx), ready for board distribution</span>
             {activeSections.length === 0 && (
-              <span className="rp-generate-note" style={{ color: '#991B1B' }}>
+              <span className="rp-generate-note" style={{ color: 'var(--color-red)' }}>
                 Select at least one section before generating.
               </span>
             )}

@@ -55,25 +55,25 @@ const STATES = {
     badge:      'Market condition',
     badgeCls:   'badge-amber',
     wrapperCls: 'signal-regional-pressure',
-    bgStyle:    { backgroundColor: '#FFFBEB', borderLeft: '4px solid #D97706' },
+    bgStyle:    { backgroundColor: 'var(--bg-amber)', borderLeft: '4px solid var(--color-amber)' },
   },
   institution_specific: {
     badge:      'Institution signal',
     badgeCls:   'badge-coral',
     wrapperCls: 'signal-institution-specific',
-    bgStyle:    { backgroundColor: '#FFF5F5', borderLeft: '4px solid #993C1D' },
+    bgStyle:    { backgroundColor: 'var(--bg-red)', borderLeft: '4px solid var(--color-coral)' },
   },
   outperforming_market: {
     badge:      'Outperforming market',
     badgeCls:   'badge-teal',
     wrapperCls: 'signal-outperforming-market',
-    bgStyle:    { backgroundColor: '#F0FDFA', borderLeft: '4px solid #0F6E56' },
+    bgStyle:    { backgroundColor: 'var(--bg-teal)', borderLeft: '4px solid var(--color-teal)' },
   },
   no_signal: {
     badge:      null,
     badgeCls:   '',
     wrapperCls: 'signal-no-signal',
-    bgStyle:    { backgroundColor: '#F8F9FA', borderLeft: '4px solid #9E9E9E' },
+    bgStyle:    { backgroundColor: 'var(--bg-subtle)', borderLeft: '4px solid var(--color-peer)' },
   },
 };
 

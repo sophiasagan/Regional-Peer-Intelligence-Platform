@@ -266,7 +266,7 @@ function EwCollapsedRow({ type, onExpand }) {
       <span className="ew-collapsed-row-label">{EW_TYPE_LABELS[type] ?? type}</span>
       <span
         className="ew-level-badge"
-        style={{ color: '#D32F2F', backgroundColor: '#FEF2F2', border: '1px solid #EF4444' }}
+        style={{ color: 'var(--color-red)', backgroundColor: 'var(--bg-red)', border: '1px solid var(--color-red)' }}
       >
         Urgent
       </span>

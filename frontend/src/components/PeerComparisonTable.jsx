@@ -502,7 +502,7 @@ export default function PeerComparisonTable({
             {showPanel ? 'Close' : 'Select peers'}
           </button>
           {isCustom && (
-            <button className="cm-link-btn" onClick={handleReset} style={{ fontSize: 12, color: '#757575' }}>
+            <button className="cm-link-btn" onClick={handleReset} style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               Reset
             </button>
           )}

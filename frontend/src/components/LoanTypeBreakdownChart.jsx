@@ -69,7 +69,7 @@ function ValueLabel(props) {
       y={(props.y ?? 0) - 4}
       textAnchor="middle"
       fontSize={10}
-      fill={props.fill ?? '#333'}
+      fill={props.fill ?? 'var(--text)'}
       fontWeight={600}
     >
       {`${Number(v).toFixed(2)}%`}
@@ -165,9 +165,9 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
           {/* ── Legend: describes actual bar encoding (red/green = above/below peer) ── */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, fontSize: 12, marginBottom: 8 }}>
             {[
-              { color: '#E53935', label: 'Above peer median (higher delinquency)' },
-              { color: '#43A047', label: 'At or below peer median' },
-              { color: '#90A4AE', label: `${peerLabel} (peer median)` },
+              { color: 'var(--color-red)', label: 'Above peer median (higher delinquency)' },
+              { color: 'var(--color-green)', label: 'At or below peer median' },
+              { color: 'var(--color-peer)', label: `${peerLabel} (peer median)` },
             ].map(({ color, label }) => (
               <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ display: 'inline-block', width: 12, height: 12, background: color, borderRadius: 2, flexShrink: 0 }} />
@@ -182,10 +182,10 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
               barCategoryGap="30%"
               barGap={4}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E8" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 11, fill: '#555' }}
+                tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
                 angle={-30}
                 textAnchor="end"
                 interval={0}
@@ -193,7 +193,7 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
               />
               <YAxis
                 tickFormatter={v => `${v.toFixed(2)}%`}
-                tick={{ fontSize: 11, fill: '#555' }}
+                tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
                 tickLine={false}
                 axisLine={false}
                 width={58}
@@ -203,13 +203,13 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
 
               <Bar dataKey="inst_pct" name="Your institution" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
                 {delinqData.map((entry, i) => (
-                  <Cell key={i} fill={entry.above_peer ? '#E53935' : '#43A047'} />
+                  <Cell key={i} fill={entry.above_peer ? 'var(--color-red)' : 'var(--color-green)'} />
                 ))}
-                <LabelList content={<ValueLabel fill="#333" />} />
+                <LabelList content={<ValueLabel fill="var(--text-strong)" />} />
               </Bar>
 
-              <Bar dataKey="peer_pct" name={peerLabel} fill="#90A4AE" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
-                <LabelList content={<ValueLabel fill="#666" />} />
+              <Bar dataKey="peer_pct" name={peerLabel} fill="var(--color-peer)" maxBarSize={36} minPointSize={3} radius={[3,3,0,0]}>
+                <LabelList content={<ValueLabel fill="var(--text-muted)" />} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -220,10 +220,10 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
       {!loading && rows.length > 0 && !hasDelinq && (
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={chartData} margin={{ top: 16, right: 24, left: 8, bottom: 64 }} barCategoryGap="35%">
-            <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E8" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 11, fill: '#555' }}
+              tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
               angle={-30}
               textAnchor="end"
               interval={0}
@@ -231,17 +231,17 @@ export default function LoanTypeBreakdownChart({ charterNumber, period, peerGrou
             />
             <YAxis
               tickFormatter={v => `${v.toFixed(0)}%`}
-              tick={{ fontSize: 11, fill: '#555' }}
+              tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
               tickLine={false}
               axisLine={false}
             />
             <Tooltip formatter={v => `${v?.toFixed(1)}% of loans`} />
-            <Bar dataKey="comp_pct" name="Portfolio share %" fill="#64B5F6" maxBarSize={44} radius={[3,3,0,0]}>
+            <Bar dataKey="comp_pct" name="Portfolio share %" fill="var(--color-blue)" maxBarSize={44} radius={[3,3,0,0]}>
               <LabelList
                 dataKey="comp_pct"
                 position="top"
                 formatter={v => v != null ? `${v.toFixed(1)}%` : ''}
-                style={{ fontSize: 10, fill: '#333' }}
+                style={{ fontSize: 10, fill: 'var(--text)' }}
               />
             </Bar>
           </BarChart>

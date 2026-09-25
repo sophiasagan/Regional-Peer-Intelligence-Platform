@@ -17,10 +17,10 @@ const API = import.meta.env.VITE_API_URL ?? '';
 
 // Alert level colors (spec: watch=amber, alert=orange, urgent=red)
 const LEVEL_CONFIG = {
-  none:   { color: '#6B7280', bg: '#F9FAFB', border: '#D1D5DB', label: 'Normal' },
-  watch:  { color: '#D97706', bg: '#FFFBEB', border: '#F59E0B', label: 'Watch'  },
-  alert:  { color: '#EA580C', bg: '#FFF7ED', border: '#FB923C', label: 'Alert'  },
-  urgent: { color: '#D32F2F', bg: '#FEF2F2', border: '#EF4444', label: 'Urgent' },
+  none:   { color: 'var(--text-muted)',   bg: 'var(--bg-subtle)',  border: 'var(--border-strong)', label: 'Normal' },
+  watch:  { color: 'var(--color-amber)',  bg: 'var(--bg-amber)',   border: 'var(--color-amber)',   label: 'Watch'  },
+  alert:  { color: 'var(--color-orange)', bg: 'var(--bg-orange)',  border: 'var(--color-orange)',  label: 'Alert'  },
+  urgent: { color: 'var(--color-red)',    bg: 'var(--bg-red)',     border: 'var(--color-red)',     label: 'Urgent' },
 };
 
 function fmtPct(v) {

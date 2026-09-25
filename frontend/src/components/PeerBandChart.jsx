@@ -2,12 +2,13 @@
  * PeerBandChart — the ONLY chart type in P76. Replaces all other chart types.
  *
  * Visual spec (Callahan color language):
- *   Your institution:    solid 2.5px #1565C0, circle markers
+ *   Your institution:    solid 2.5px blue, circle markers
  *   IQR band (p25-p75): light gray fill, 20% opacity
- *   Top decile line:     solid 1px teal #0F6E56  — p10 for ADVERSE, p90 for POSITIVE
- *   Bottom decile line:  solid 1px coral #993C1D — p90 for ADVERSE, p10 for POSITIVE
+ *   Top decile line:     solid 1px teal  — p10 for ADVERSE, p90 for POSITIVE
+ *   Bottom decile line:  solid 1px coral — p90 for ADVERSE, p10 for POSITIVE
  *   Peer median:         dashed 1px gray
- *   Regional peers:      dashed purple 1.5px #6A1B9A — P76 EXCLUSIVE, fetched when peerGroup≠REGIONAL
+ *   Regional peers:      dashed purple 1.5px — P76 EXCLUSIVE, fetched when peerGroup≠REGIONAL
+ *   (Exact shades live in index.css as --chart-* tokens — tuned for the dark Magnus theme.)
  *   Examiner threshold:  red dashed horizontal ReferenceLine
  *
  * Below chart: percentile bar — position represents adjusted rank (already inverted for adverse),
@@ -34,13 +35,13 @@ const API = import.meta.env.VITE_API_URL ?? '';
 const SKIP_ASK_MAGNUS = new Set(['deposit_market_share_pct', 'loan_market_share_pct']);
 
 const C = {
-  institution: '#1565C0',
-  topDecile:   '#0F6E56',
-  bottomDecile:'#993C1D',
-  peerMedian:  '#757575',
-  bandFill:    '#B0BEC5',
-  regional:    '#6A1B9A',
-  threshold:   '#D32F2F',
+  institution: 'var(--chart-institution)',
+  topDecile:   'var(--chart-top-decile)',
+  bottomDecile:'var(--chart-bottom-decile)',
+  peerMedian:  'var(--chart-peer-median)',
+  bandFill:    'var(--chart-band)',
+  regional:    'var(--chart-regional)',
+  threshold:   'var(--chart-threshold)',
 };
 
 const ADVERSE_METRICS = new Set([
@@ -152,24 +153,24 @@ function InstDot({ cx, cy, payload, annotations }) {
   if (annotations.topEntries.has(period)) {
     return (
       <g>
-        <circle cx={cx} cy={cy} r={7} fill={C.topDecile} stroke="white" strokeWidth={1.5} />
-        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={9}>★</text>
+        <circle cx={cx} cy={cy} r={7} fill={C.topDecile} stroke="var(--bg-card)" strokeWidth={1.5} />
+        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="var(--black)" fontSize={9}>★</text>
       </g>
     );
   }
   if (annotations.bottomEntries.has(period)) {
     return (
       <g>
-        <circle cx={cx} cy={cy} r={7} fill={C.bottomDecile} stroke="white" strokeWidth={1.5} />
-        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={9}>▼</text>
+        <circle cx={cx} cy={cy} r={7} fill={C.bottomDecile} stroke="var(--bg-card)" strokeWidth={1.5} />
+        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="var(--black)" fontSize={9}>▼</text>
       </g>
     );
   }
   if (annotations.crossovers.has(period)) {
     const d = `M${cx},${cy - 6} L${cx + 5},${cy} L${cx},${cy + 6} L${cx - 5},${cy} Z`;
-    return <path d={d} fill={C.institution} stroke="white" strokeWidth={1} />;
+    return <path d={d} fill={C.institution} stroke="var(--bg-card)" strokeWidth={1} />;
   }
-  return <circle cx={cx} cy={cy} r={5} fill="#fff" stroke={C.institution} strokeWidth={2} />;
+  return <circle cx={cx} cy={cy} r={5} fill="var(--bg-card)" stroke={C.institution} strokeWidth={2} />;
 }
 
 // Percentile bar displayed below chart.
@@ -265,7 +266,7 @@ const CustomTooltip = ({ active, payload, label, unit }) => {
       {rows.map(p => (
         <div key={p.dataKey} className="tooltip-row">
           <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" style={{ flexShrink: 0 }}>
-            <circle cx="4" cy="4" r="4" fill={p.stroke ?? p.color ?? '#999'} />
+            <circle cx="4" cy="4" r="4" fill={p.stroke ?? p.color ?? 'var(--text-muted)'} />
           </svg>
           <span className="tooltip-name">{p.name}</span>
           <span className="tooltip-value">{fmt(p.value, unit)}</span>
@@ -580,7 +581,7 @@ export default function PeerBandChart({
       {/* ── Chart ── */}
       <ResponsiveContainer width="100%" height={420}>
         <ComposedChart data={plotData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
-          <CartesianGrid stroke="#EEEEEE" strokeWidth={1} vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" strokeWidth={1} vertical={false} />
           <XAxis dataKey="period" tick={{ fontSize: 12 }} />
           <YAxis
             tick={{ fontSize: 12 }}
@@ -625,8 +626,8 @@ export default function PeerBandChart({
             dataKey="topDecileLine"
             stroke={C.topDecile}
             strokeWidth={1}
-            dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.topDecile }}
-            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.topDecile }}
+            dot={{ r: 5, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.topDecile }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.topDecile }}
             name="Top decile"
             legendType="line"
           />
@@ -636,8 +637,8 @@ export default function PeerBandChart({
             dataKey="bottomDecileLine"
             stroke={C.bottomDecile}
             strokeWidth={1}
-            dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.bottomDecile }}
-            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.bottomDecile }}
+            dot={{ r: 5, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.bottomDecile }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.bottomDecile }}
             name="Bottom decile"
             legendType="line"
           />
@@ -648,8 +649,8 @@ export default function PeerBandChart({
             stroke={C.peerMedian}
             strokeWidth={1}
             strokeDasharray="4 4"
-            dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.peerMedian }}
-            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.peerMedian }}
+            dot={{ r: 5, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.peerMedian }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.peerMedian }}
             name="Peer median"
           />
 
@@ -660,8 +661,8 @@ export default function PeerBandChart({
               stroke={C.regional}
               strokeWidth={1.5}
               strokeDasharray="6 3"
-              dot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: C.regional }}
-              activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.regional }}
+              dot={{ r: 5, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.regional }}
+              activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.regional }}
               name="Regional peers (ref.)"
             />
           )}
@@ -675,7 +676,7 @@ export default function PeerBandChart({
             dot={(props) => (
               <InstDot key={props.index} {...props} annotations={annotations} />
             )}
-            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff', stroke: C.institution }}
+            activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: C.institution }}
             isAnimationActive={false}
           />
 
